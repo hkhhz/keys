@@ -195,308 +195,13 @@ local WhitelistOres = {}
 local WhitelistOresEnabled = false
 local NotifiedRocks = {}
 local MainAltCalledPosition = nil
-local AltFarmGui = nil
-local AltFarmData = {
-    LastNotification = "",
-    Notifications = {},
-    Status = "Idle",
-    WhitelistOresFound = 0
-}
-
--- Notification system
-local function AddNotification(message)
-    table.insert(AltFarmData.Notifications, 1, {
-        Time = os.date("%H:%M:%S"),
-        Message = message
-    })
-    
-    -- Keep only last 10 notifications
-    if #AltFarmData.Notifications > 10 then
-        table.remove(AltFarmData.Notifications, 11)
-    end
-    
-    AltFarmData.LastNotification = message
-    
-    -- Update GUI if it exists
-    if AltFarmGui then
-        pcall(function()
-            local notificationList = AltFarmGui:FindFirstChild("NotificationList")
-            if notificationList then
-                notificationList:ClearAllChildren()
-                
-                for i, notification in ipairs(AltFarmData.Notifications) do
-                    local notificationFrame = Instance.new("Frame")
-                    notificationFrame.Name = "Notification" .. i
-                    notificationFrame.Size = UDim2.new(1, -10, 0, 40)
-                    notificationFrame.Position = UDim2.new(0, 5, 0, (i-1) * 42)
-                    notificationFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-                    notificationFrame.BorderSizePixel = 0
-                    
-                    local timeLabel = Instance.new("TextLabel")
-                    timeLabel.Name = "Time"
-                    timeLabel.Size = UDim2.new(0, 60, 1, 0)
-                    timeLabel.Position = UDim2.new(0, 5, 0, 0)
-                    timeLabel.BackgroundTransparency = 1
-                    timeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-                    timeLabel.Text = notification.Time
-                    timeLabel.TextSize = 12
-                    timeLabel.Font = Enum.Font.Gotham
-                    timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-                    
-                    local messageLabel = Instance.new("TextLabel")
-                    messageLabel.Name = "Message"
-                    messageLabel.Size = UDim2.new(1, -70, 1, 0)
-                    messageLabel.Position = UDim2.new(0, 65, 0, 0)
-                    messageLabel.BackgroundTransparency = 1
-                    messageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    messageLabel.Text = notification.Message
-                    messageLabel.TextSize = 12
-                    messageLabel.Font = Enum.Font.Gotham
-                    messageLabel.TextXAlignment = Enum.TextXAlignment.Left
-                    messageLabel.TextWrapped = true
-                    
-                    timeLabel.Parent = notificationFrame
-                    messageLabel.Parent = notificationFrame
-                    notificationFrame.Parent = notificationList
-                end
-            end
-            
-            local statusLabel = AltFarmGui:FindFirstChild("StatusLabel")
-            if statusLabel then
-                statusLabel.Text = "Status: " .. AltFarmData.Status
-            end
-            
-            local foundLabel = AltFarmGui:FindFirstChild("FoundLabel")
-            if foundLabel then
-                foundLabel.Text = "Whitelist Ores Found: " .. AltFarmData.WhitelistOresFound
-            end
-        end)
-    end
-end
-
--- Create Alt Farm GUI
-local function CreateAltFarmGui()
-    if AltFarmGui then
-        AltFarmGui:Destroy()
-    end
-    
-    AltFarmGui = Instance.new("ScreenGui")
-    AltFarmGui.Name = "AltFarmGui"
-    AltFarmGui.ResetOnSpawn = false
-    AltFarmGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 350, 0, 300)
-    mainFrame.Position = UDim2.new(0, 10, 0, 100)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    mainFrame.BorderSizePixel = 1
-    mainFrame.BorderColor3 = Color3.fromRGB(60, 60, 60)
-    
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    titleBar.BorderSizePixel = 0
-    
-    local titleText = Instance.new("TextLabel")
-    titleText.Name = "TitleText"
-    titleText.Size = UDim2.new(1, -30, 1, 0)
-    titleText.Position = UDim2.new(0, 10, 0, 0)
-    titleText.BackgroundTransparency = 1
-    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleText.Text = "Alt Farm System - " .. AltFarmMode
-    titleText.TextSize = 14
-    titleText.Font = Enum.Font.GothamBold
-    titleText.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local closeButton = Instance.new("TextButton")
-    closeButton.Name = "CloseButton"
-    closeButton.Size = UDim2.new(0, 20, 0, 20)
-    closeButton.Position = UDim2.new(1, -25, 0, 5)
-    closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    closeButton.BorderSizePixel = 0
-    closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeButton.TextSize = 12
-    closeButton.Font = Enum.Font.GothamBold
-    
-    local contentScrolling = Instance.new("ScrollingFrame")
-    contentScrolling.Name = "ContentScrolling"
-    contentScrolling.Size = UDim2.new(1, -10, 1, -40)
-    contentScrolling.Position = UDim2.new(0, 5, 0, 35)
-    contentScrolling.BackgroundTransparency = 1
-    contentScrolling.BorderSizePixel = 0
-    contentScrolling.ScrollBarThickness = 6
-    contentScrolling.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-    contentScrolling.CanvasSize = UDim2.new(0, 0, 0, 500)
-    
-    local statusFrame = Instance.new("Frame")
-    statusFrame.Name = "StatusFrame"
-    statusFrame.Size = UDim2.new(1, 0, 0, 25)
-    statusFrame.Position = UDim2.new(0, 0, 0, 5)
-    statusFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    statusFrame.BorderSizePixel = 0
-    
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(1, -10, 1, 0)
-    statusLabel.Position = UDim2.new(0, 5, 0, 0)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    statusLabel.Text = "Status: " .. AltFarmData.Status
-    statusLabel.TextSize = 12
-    statusLabel.Font = Enum.Font.Gotham
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local foundFrame = Instance.new("Frame")
-    foundFrame.Name = "FoundFrame"
-    foundFrame.Size = UDim2.new(1, 0, 0, 25)
-    foundFrame.Position = UDim2.new(0, 0, 0, 35)
-    foundFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    foundFrame.BorderSizePixel = 0
-    
-    local foundLabel = Instance.new("TextLabel")
-    foundLabel.Name = "FoundLabel"
-    foundLabel.Size = UDim2.new(1, -10, 1, 0)
-    foundLabel.Position = UDim2.new(0, 5, 0, 0)
-    foundLabel.BackgroundTransparency = 1
-    foundLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    foundLabel.Text = "Whitelist Ores Found: " .. AltFarmData.WhitelistOresFound
-    foundLabel.TextSize = 12
-    foundLabel.Font = Enum.Font.Gotham
-    foundLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local notificationsTitle = Instance.new("TextLabel")
-    notificationsTitle.Name = "NotificationsTitle"
-    notificationsTitle.Size = UDim2.new(1, 0, 0, 25)
-    notificationsTitle.Position = UDim2.new(0, 0, 0, 65)
-    notificationsTitle.BackgroundTransparency = 1
-    notificationsTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
-    notificationsTitle.Text = "Recent Notifications:"
-    notificationsTitle.TextSize = 12
-    notificationsTitle.Font = Enum.Font.GothamBold
-    notificationsTitle.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local notificationList = Instance.new("Frame")
-    notificationList.Name = "NotificationList"
-    notificationList.Size = UDim2.new(1, 0, 0, 220)
-    notificationList.Position = UDim2.new(0, 0, 0, 95)
-    notificationList.BackgroundTransparency = 1
-    
-    local clearButton = Instance.new("TextButton")
-    clearButton.Name = "ClearButton"
-    clearButton.Size = UDim2.new(0, 80, 0, 25)
-    clearButton.Position = UDim2.new(0.5, -40, 1, -30)
-    clearButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    clearButton.BorderSizePixel = 0
-    clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    clearButton.Text = "Clear Notifications"
-    clearButton.TextSize = 12
-    clearButton.Font = Enum.Font.Gotham
-    
-    -- Assemble GUI
-    statusLabel.Parent = statusFrame
-    foundLabel.Parent = foundFrame
-    statusFrame.Parent = contentScrolling
-    foundFrame.Parent = contentScrolling
-    notificationsTitle.Parent = contentScrolling
-    notificationList.Parent = contentScrolling
-    clearButton.Parent = contentScrolling
-    
-    contentScrolling.CanvasSize = UDim2.new(0, 0, 0, 150 + (#AltFarmData.Notifications * 42))
-    
-    titleText.Parent = titleBar
-    closeButton.Parent = titleBar
-    titleBar.Parent = mainFrame
-    contentScrolling.Parent = mainFrame
-    mainFrame.Parent = AltFarmGui
-    AltFarmGui.Parent = game.CoreGui
-    
-    -- Connect events
-    closeButton.MouseButton1Click:Connect(function()
-        AltFarmGui.Enabled = false
-    end)
-    
-    clearButton.MouseButton1Click:Connect(function()
-        AltFarmData.Notifications = {}
-        AltFarmData.LastNotification = ""
-        AddNotification("Notifications cleared")
-    end)
-    
-    -- Update existing notifications
-    for _, notification in ipairs(AltFarmData.Notifications) do
-        AddNotification(notification.Message)
-    end
-end
-
--- Whisper notification function
-local function NotifyMainAlt(rockPosition, rockName)
-    if not AltFarmEnabled or AltFarmMode ~= "Helper Alt" or MainAltName == "" then
-        return
-    end
-    
-    local Players = game:GetService("Players")
-    local targetPlayer = Players:FindFirstChild(MainAltName)
-    
-    if not targetPlayer then
-        AddNotification("Main Alt not found in game: " .. MainAltName)
-        return
-    end
-    
-    -- Try TextChatService first (new chat system)
-    local success = pcall(function()
-        local TextChatService = game:GetService("TextChatService")
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if channel then
-                local message = string.format("/w %s [ALTFARM] Found whitelist ore at: X=%.1f, Y=%.1f, Z=%.1f", 
-                    MainAltName, 
-                    rockPosition.X, 
-                    rockPosition.Y, 
-                    rockPosition.Z)
-                channel:SendAsync(message)
-                return true
-            end
-        end
-        return false
-    end)
-    
-    -- Fallback to old chat system
-    if not success then
-        pcall(function()
-            local ReplicatedStorage = game:GetService("ReplicatedStorage")
-            local ChatEvents = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents", 5)
-            
-            if ChatEvents then
-                local SayMessageRequest = ChatEvents:WaitForChild("SayMessageRequest", 5)
-                if SayMessageRequest then
-                    local message = string.format("/w %s [ALTFARM] Found whitelist ore at: X=%.1f, Y=%.1f, Z=%.1f", 
-                        MainAltName, 
-                        rockPosition.X, 
-                        rockPosition.Y, 
-                        rockPosition.Z)
-                    SayMessageRequest:FireServer(message, "All")
-                    success = true
-                end
-            end
-        end)
-    end
-    
-    if success then
-        AddNotification("Notified " .. MainAltName .. " about whitelist ore!")
-        AltFarmData.WhitelistOresFound = AltFarmData.WhitelistOresFound + 1
-        
-        Fluent:Notify({
-            Title = "Alt Farm",
-            Content = "Notified " .. MainAltName .. " about whitelist ore!",
-            Duration = 3
-        })
-    else
-        AddNotification("Failed to send whisper to " .. MainAltName)
-    end
-end
+local AltFarmGUI = nil
+local AltFarmStatusLabel = nil
+local AltFarmOreLabel = nil
+local AltFarmDistanceLabel = nil
+local AltFarmPositionLabel = nil
+local AltFarmRockCountLabel = nil
+local AltFarmMiningActive = false
 
 local function GetOreTypes()
     local oreTypes = {}
@@ -549,7 +254,7 @@ local function HasWhitelistOre(rockModel)
             if oreType then
                 for _, whitelistOre in ipairs(WhitelistOres) do
                     if string.lower(oreType) == string.lower(whitelistOre) then
-                        return true
+                        return true, oreType
                     end
                 end
             end
@@ -612,6 +317,216 @@ local function HasSkippedOre(rockModel)
     end
     
     return false
+end
+
+local function CreateAltFarmGUI()
+    if AltFarmGUI then
+        AltFarmGUI:Destroy()
+    end
+    
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "AltFarmGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 350, 0, 200)
+    mainFrame.Position = UDim2.new(0.5, -175, 0.02, 0)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 12)
+    uiCorner.Parent = mainFrame
+    
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.fromRGB(0, 200, 255)
+    uiStroke.Thickness = 2
+    uiStroke.Parent = mainFrame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Size = UDim2.new(1, 0, 0, 45)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    titleLabel.BorderSizePixel = 0
+    titleLabel.Text = "🎯 ALT FARM - MAIN ALT"
+    titleLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+    titleLabel.TextSize = 18
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Parent = mainFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 12)
+    titleCorner.Parent = titleLabel
+    
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, -20, 0, 28)
+    statusLabel.Position = UDim2.new(0, 10, 0, 55)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "📡 Status: Waiting for helper alt..."
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+    statusLabel.TextSize = 14
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = mainFrame
+    
+    local oreLabel = Instance.new("TextLabel")
+    oreLabel.Name = "OreLabel"
+    oreLabel.Size = UDim2.new(1, -20, 0, 28)
+    oreLabel.Position = UDim2.new(0, 10, 0, 88)
+    oreLabel.BackgroundTransparency = 1
+    oreLabel.Text = "💎 Ore: None"
+    oreLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
+    oreLabel.TextSize = 15
+    oreLabel.Font = Enum.Font.GothamBold
+    oreLabel.TextXAlignment = Enum.TextXAlignment.Left
+    oreLabel.Parent = mainFrame
+    
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Name = "DistanceLabel"
+    distanceLabel.Size = UDim2.new(1, -20, 0, 25)
+    distanceLabel.Position = UDim2.new(0, 10, 0, 121)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.Text = "📏 Distance: --"
+    distanceLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
+    distanceLabel.TextSize = 13
+    distanceLabel.Font = Enum.Font.Gotham
+    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+    distanceLabel.Parent = mainFrame
+    
+    local positionLabel = Instance.new("TextLabel")
+    positionLabel.Name = "PositionLabel"
+    positionLabel.Size = UDim2.new(1, -20, 0, 25)
+    positionLabel.Position = UDim2.new(0, 10, 0, 148)
+    positionLabel.BackgroundTransparency = 1
+    positionLabel.Text = "📍 Position: --"
+    positionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    positionLabel.TextSize = 12
+    positionLabel.Font = Enum.Font.Gotham
+    positionLabel.TextXAlignment = Enum.TextXAlignment.Left
+    positionLabel.Parent = mainFrame
+    
+    local rockCountLabel = Instance.new("TextLabel")
+    rockCountLabel.Name = "RockCountLabel"
+    rockCountLabel.Size = UDim2.new(1, -20, 0, 22)
+    rockCountLabel.Position = UDim2.new(0, 10, 0, 173)
+    rockCountLabel.BackgroundTransparency = 1
+    rockCountLabel.Text = "⛏️ Rocks Found: 0"
+    rockCountLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    rockCountLabel.TextSize = 11
+    rockCountLabel.Font = Enum.Font.Gotham
+    rockCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rockCountLabel.Parent = mainFrame
+    
+    AltFarmGUI = screenGui
+    AltFarmStatusLabel = statusLabel
+    AltFarmOreLabel = oreLabel
+    AltFarmDistanceLabel = distanceLabel
+    AltFarmPositionLabel = positionLabel
+    AltFarmRockCountLabel = rockCountLabel
+end
+
+local function UpdateAltFarmGUI(status, ore, distance, position, rockCount)
+    if not AltFarmGUI or not AltFarmStatusLabel then return end
+    
+    if status then
+        AltFarmStatusLabel.Text = "📡 Status: " .. status
+        if status:find("Mining") then
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+        elseif status:find("Moving") or status:find("Teleporting") then
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        else
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+        end
+    end
+    
+    if ore then
+        AltFarmOreLabel.Text = "💎 Ore: " .. ore
+        if ore ~= "None" and ore ~= "Searching..." then
+            AltFarmOreLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+        else
+            AltFarmOreLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
+        end
+    end
+    
+    if distance then
+        AltFarmDistanceLabel.Text = string.format("📏 Distance: %.1f studs", distance)
+        if distance < 10 then
+            AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        elseif distance < 50 then
+            AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        else
+            AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+    end
+    
+    if position then
+        AltFarmPositionLabel.Text = string.format("📍 Position: X:%.0f Y:%.0f Z:%.0f", position.X, position.Y, position.Z)
+    end
+    
+    if rockCount then
+        AltFarmRockCountLabel.Text = "⛏️ Rocks Found: " .. tostring(rockCount)
+    end
+end
+
+local function NotifyMainAlt(rockPosition, oreName)
+    if not AltFarmEnabled or AltFarmMode ~= "Helper Alt" or MainAltName == "" then
+        return
+    end
+    
+    local Players = game:GetService("Players")
+    local TextChatService = game:GetService("TextChatService")
+    
+    -- Create whisper message
+    local message = string.format("/w %s WHITELISTROCK:%d,%d,%d:%s", 
+        MainAltName,
+        math.floor(rockPosition.X),
+        math.floor(rockPosition.Y),
+        math.floor(rockPosition.Z),
+        oreName or "Unknown")
+    
+    -- Try TextChatService first (new chat)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local success, err = pcall(function()
+            local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 5)
+            if generalChannel then
+                generalChannel:SendAsync(message)
+            end
+        end)
+        
+        if success then
+            Fluent:Notify({
+                Title = "Alt Farm - Helper",
+                Content = "✅ Whispered to " .. MainAltName,
+                SubContent = oreName .. " at " .. math.floor(rockPosition.X) .. ", " .. math.floor(rockPosition.Y) .. ", " .. math.floor(rockPosition.Z),
+                Duration = 4
+            })
+        end
+    else
+        -- Fallback to legacy chat
+        local success, err = pcall(function()
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+            local SayMessageRequest = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+            if SayMessageRequest then
+                SayMessageRequest = SayMessageRequest:FindFirstChild("SayMessageRequest")
+                if SayMessageRequest then
+                    SayMessageRequest:FireServer(message, "All")
+                    
+                    Fluent:Notify({
+                        Title = "Alt Farm - Helper",
+                        Content = "✅ Whispered to " .. MainAltName,
+                        SubContent = oreName .. " at position",
+                        Duration = 4
+                    })
+                end
+            end
+        end)
+    end
 end
 
 local function SetupCharacterHighlight(enabled)
@@ -677,11 +592,11 @@ local function SetupCamera(enabled)
                             Vector3.new(0, cameraHeight, -10),
                             Vector3.new(10, cameraHeight, 0),
                             Vector3.new(-10, cameraHeight, 0),
-                            Vector3.new(7, cameraHeight, 7), 
+                            Vector3.new(7, cameraHeight, 7),
                             Vector3.new(-7, cameraHeight, 7),
-                            Vector3.new(7, cameraHeight, -7), 
-                            Vector3.new(-7, cameraHeight, -7), 
-                            Vector3.new(0, cameraHeight + 5, 0) 
+                            Vector3.new(7, cameraHeight, -7),
+                            Vector3.new(-7, cameraHeight, -7),
+                            Vector3.new(0, cameraHeight + 5, 0)
                         }
                         
                         for _, offset in ipairs(alternativeOffsets) do
@@ -861,14 +776,16 @@ local function FindNearestRock(maxDist)
                     end
                     
                     -- Alt Farm Logic: Skip rocks with whitelist ores if Helper Alt
-                    if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled and HasWhitelistOre(descendant.Parent) then
-                        local rockId = tostring(descendant.Parent)
-                        if not NotifiedRocks[rockId] then
-                            NotifiedRocks[rockId] = true
-                            NotifyMainAlt(descendant.Position, descendant.Parent.Name)
-                            AltFarmData.Status = "Found Whitelist Ore - Notifying"
+                    if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
+                        local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
+                        if hasWhitelist then
+                            local rockId = tostring(descendant.Parent)
+                            if not NotifiedRocks[rockId] then
+                                NotifiedRocks[rockId] = true
+                                NotifyMainAlt(descendant.Position, oreName)
+                            end
+                            continue
                         end
-                        continue
                     end
                     
                     local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
@@ -945,7 +862,7 @@ local function FastTweenToRock(rock)
     local tweenInfo = TweenInfo.new(
         tweenTime,
         Enum.EasingStyle.Linear,
-        Enum.EasingDirection.InOut, 
+        Enum.EasingDirection.InOut,
         0,
         false,
         0
@@ -964,100 +881,106 @@ end
 
 -- Listen for messages from Helper Alt (Main Alt Mode)
 task.spawn(function()
+    local TextChatService = game:GetService("TextChatService")
     local Players = game:GetService("Players")
     
-    -- Try new TextChatService first
-    local success, textChatService = pcall(function()
-        return game:GetService("TextChatService")
-    end)
-    
-    if success and textChatService and textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        textChatService.MessageReceived:Connect(function(message)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        TextChatService.MessageReceived:Connect(function(message)
             if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                local text = message.Text or ""
-                local sender = message.TextSource and message.TextSource.Name or ""
+                local text = message.Text
                 
-                if text:match("%[ALTFARM%]") and string.find(text, "Found whitelist ore at:") then
-                    local coords = text:match("X=([%d%.]+), Y=([%d%.]+), Z=([%d%.]+)")
-                    if coords then
-                        local x, y, z = coords:match("([%d%.]+), ([%d%.]+), ([%d%.]+)")
-                        if x and y and z then
-                            MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-                            
-                            AddNotification("Received whitelist ore location from " .. sender)
-                            AltFarmData.Status = "Moving to Whitelist Ore"
-                            
-                            -- Force enable auto mine for main alt
-                            if not AutoMineEnabled then
-                                AutoMineEnabled = true
-                                SetupCamera(true)
+                if text:match("WHITELISTROCK:") then
+                    local data = text:match("WHITELISTROCK:(.+)")
+                    if data then
+                        local coords, oreName = data:match("([^:]+):(.+)")
+                        if coords and oreName then
+                            local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
+                            if x and y and z then
+                                MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+                                
+                                UpdateAltFarmGUI("Whitelist ore received!", oreName, nil, MainAltCalledPosition, nil)
+                                
+                                Fluent:Notify({
+                                    Title = "Alt Farm - Main Alt",
+                                    Content = "✅ Received " .. oreName .. "!",
+                                    SubContent = "Teleporting to location...",
+                                    Duration = 5
+                                })
+                                
+                                ActiveMiningTarget = nil
+                                AltFarmMiningActive = true
+                                
+                                -- Force enable mining features
+                                MineBelowTarget = true
                                 SetNoclip(true)
                                 SetupCharacterHighlight(true)
-                                MineBelowTarget = true
-                                
-                                AddNotification("Auto Mine enabled automatically")
+                                SetupCamera(true)
                             end
-                            
-                            ActiveMiningTarget = nil
-                            
-                            Fluent:Notify({
-                                Title = "Alt Farm - Main Alt",
-                                Content = "Received whitelist ore location from " .. sender .. "!",
-                                SubContent = "Moving to location...",
-                                Duration = 5
-                            })
                         end
                     end
                 end
             end
         end)
     else
-        -- Fallback to old chat system
-        pcall(function()
-            local ReplicatedStorage = game:GetService("ReplicatedStorage")
-            local DefaultChatSystemChatEvents = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents")
-            local OnMessageDoneFiltering = DefaultChatSystemChatEvents:WaitForChild("OnMessageDoneFiltering")
-            
-            OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
-                if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                    local message = messageData.Message
-                    local sender = messageData.FromSpeaker
-                    
-                    if message:match("%[ALTFARM%]") and string.find(message, "Found whitelist ore at:") then
-                        local coords = message:match("X=([%d%.]+), Y=([%d%.]+), Z=([%d%.]+)")
-                        if coords then
-                            local x, y, z = coords:match("([%d%.]+), ([%d%.]+), ([%d%.]+)")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local DefaultChatSystemChatEvents = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents")
+        local OnMessageDoneFiltering = DefaultChatSystemChatEvents:WaitForChild("OnMessageDoneFiltering")
+        
+        OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
+            if AltFarmEnabled and AltFarmMode == "Main Alt" then
+                local message = messageData.Message
+                
+                if message:match("WHITELISTROCK:") then
+                    local data = message:match("WHITELISTROCK:(.+)")
+                    if data then
+                        local coords, oreName = data:match("([^:]+):(.+)")
+                        if coords and oreName then
+                            local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
                             if x and y and z then
                                 MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
                                 
-                                AddNotification("Received whitelist ore location from " .. sender)
-                                AltFarmData.Status = "Moving to Whitelist Ore"
-                                
-                                -- Force enable auto mine for main alt
-                                if not AutoMineEnabled then
-                                    AutoMineEnabled = true
-                                    SetupCamera(true)
-                                    SetNoclip(true)
-                                    SetupCharacterHighlight(true)
-                                    MineBelowTarget = true
-                                    
-                                    AddNotification("Auto Mine enabled automatically")
-                                end
-                                
-                                ActiveMiningTarget = nil
+                                UpdateAltFarmGUI("Whitelist ore received!", oreName, nil, MainAltCalledPosition, nil)
                                 
                                 Fluent:Notify({
                                     Title = "Alt Farm - Main Alt",
-                                    Content = "Received whitelist ore location from " .. sender .. "!",
-                                    SubContent = "Moving to location...",
+                                    Content = "✅ Received " .. oreName .. "!",
+                                    SubContent = "Teleporting to location...",
                                     Duration = 5
                                 })
+                                
+                                ActiveMiningTarget = nil
+                                AltFarmMiningActive = true
+                                
+                                -- Force enable mining features
+                                MineBelowTarget = true
+                                SetNoclip(true)
+                                SetupCharacterHighlight(true)
+                                SetupCamera(true)
                             end
                         end
                     end
                 end
-            end)
+            end
         end)
+    end
+end)
+
+-- Main Alt GUI Distance Updater
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if AltFarmEnabled and AltFarmMode == "Main Alt" and AltFarmGUI then
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if MainAltCalledPosition and root then
+                local distance = (root.Position - MainAltCalledPosition).Magnitude
+                UpdateAltFarmGUI(nil, nil, distance, nil, nil)
+            elseif ActiveMiningTarget and ActiveMiningTarget.Parent and root then
+                local distance = (root.Position - ActiveMiningTarget.Position).Magnitude
+                UpdateAltFarmGUI(nil, nil, distance, nil, nil)
+            end
+        end
     end
 end)
 
@@ -1068,7 +991,10 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
         
-        if AutoMineEnabled and MineBelowTarget and root and humanoid and ActiveMiningTarget and ActiveMiningTarget.Parent then
+        -- Check if we should be mining (either AutoMine enabled OR Main Alt with active mining)
+        local shouldMine = AutoMineEnabled or AltFarmMiningActive
+        
+        if shouldMine and MineBelowTarget and root and humanoid and ActiveMiningTarget and ActiveMiningTarget.Parent then
             humanoid.PlatformStand = true
             humanoid.Sit = true
             
@@ -1102,18 +1028,20 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
 
-        if AutoMineEnabled and ToolActivated and root and humanoid then
-            -- Update status for GUI
-            if AltFarmEnabled then
-                AltFarmData.Status = "Searching for Rocks"
-            end
-            
+        -- Check if we should be mining (either AutoMine enabled OR Main Alt with active mining)
+        local shouldMine = AutoMineEnabled or AltFarmMiningActive
+
+        if shouldMine and ToolActivated and root and humanoid then
             -- Main Alt Mode: Priority check for called position
-            if AltFarmEnabled and AltFarmMode == "Main Alt" and MainAltCalledPosition then
+            if AltFarmMiningActive and MainAltCalledPosition then
                 local rocksFolder = Workspace:FindFirstChild("Rocks")
                 if rocksFolder then
                     local closestRockToCall = nil
-                    local bestDist = 30
+                    local bestDist = 50
+                    local foundOreName = ""
+                    local rockCount = 0
+                    
+                    UpdateAltFarmGUI("Searching for rock...", "Searching...", nil, nil, nil)
                     
                     for _, region in ipairs(rocksFolder:GetChildren()) do
                         for _, descendant in ipairs(region:GetDescendants()) do
@@ -1129,9 +1057,14 @@ task.spawn(function()
                                         if not hp or hp <= 0 then isValid = false end
                                     end
                                     
-                                    if isValid and HasWhitelistOre(descendant.Parent) then
-                                        closestRockToCall = descendant
-                                        bestDist = dist
+                                    if isValid then
+                                        local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
+                                        if hasWhitelist then
+                                            closestRockToCall = descendant
+                                            bestDist = dist
+                                            foundOreName = oreName or "Unknown"
+                                            rockCount = rockCount + 1
+                                        end
                                     end
                                 end
                             end
@@ -1140,12 +1073,26 @@ task.spawn(function()
                     
                     if closestRockToCall then
                         ActiveMiningTarget = closestRockToCall
+                        UpdateAltFarmGUI("Teleporting to rock...", foundOreName, bestDist, closestRockToCall.Position, rockCount)
                         FastTweenToRock(ActiveMiningTarget)
                         MainAltCalledPosition = nil
-                        AltFarmData.Status = "Mining Whitelist Ore"
-                        AddNotification("Mining whitelist ore at Main Alt location")
+                        
+                        Fluent:Notify({
+                            Title = "Alt Farm - Main Alt",
+                            Content = "🎯 Found " .. foundOreName .. "!",
+                            SubContent = string.format("Distance: %.1f studs", bestDist),
+                            Duration = 3
+                        })
                     else
+                        UpdateAltFarmGUI("Rock not found!", "None", nil, nil, 0)
                         MainAltCalledPosition = nil
+                        AltFarmMiningActive = false
+                        
+                        Fluent:Notify({
+                            Title = "Alt Farm - Main Alt",
+                            Content = "❌ Rock not found or already mined",
+                            Duration = 3
+                        })
                     end
                 end
             end
@@ -1163,20 +1110,40 @@ task.spawn(function()
             local targetValid = false
             if ActiveMiningTarget and ActiveMiningTarget.Parent then
                 local isTarget = false
-                for _, targetName in ipairs(MineTargets) do
-                    if ActiveMiningTarget.Parent.Name == targetName then
-                        isTarget = true
-                        break
+                
+                -- For Main Alt mode with active mining, we don't check MineTargets
+                if AltFarmMiningActive then
+                    isTarget = true
+                else
+                    for _, targetName in ipairs(MineTargets) do
+                        if ActiveMiningTarget.Parent.Name == targetName then
+                            isTarget = true
+                            break
+                        end
                     end
                 end
                 
                 if isTarget then
-                    if SkipOresEnabled and HasSkippedOre(ActiveMiningTarget.Parent) then
+                    if SkipOresEnabled and HasSkippedOre(ActiveMiningTarget.Parent) and not AltFarmMiningActive then
                         targetValid = false
                         ActiveMiningTarget = nil
-                    elseif AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled and HasWhitelistOre(ActiveMiningTarget.Parent) then
-                        targetValid = false
-                        ActiveMiningTarget = nil
+                    elseif AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
+                        local hasWhitelist = HasWhitelistOre(ActiveMiningTarget.Parent)
+                        if hasWhitelist then
+                            targetValid = false
+                            ActiveMiningTarget = nil
+                        else
+                            local infoFrame = ActiveMiningTarget.Parent:FindFirstChild("infoFrame")
+                            local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
+                            if hpText then
+                                local hp = tonumber(hpText:match("^(%d+)"))
+                                if hp and hp > 0 then 
+                                    targetValid = true 
+                                end
+                            else
+                                targetValid = true
+                            end
+                        end
                     else
                         local infoFrame = ActiveMiningTarget.Parent:FindFirstChild("infoFrame")
                         local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
@@ -1184,30 +1151,41 @@ task.spawn(function()
                             local hp = tonumber(hpText:match("^(%d+)"))
                             if hp and hp > 0 then 
                                 targetValid = true
-                                AltFarmData.Status = "Mining Rock"
+                                if AltFarmMiningActive then
+                                    UpdateAltFarmGUI("Mining ore...", nil, nil, nil, nil)
+                                end
+                            else
+                                if AltFarmMiningActive then
+                                    UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, nil, nil)
+                                    AltFarmMiningActive = false
+                                end
                             end
                         else
                             targetValid = true
-                            AltFarmData.Status = "Mining Rock"
                         end
                     end
                 end
             end
 
-            if not targetValid then 
+            if not targetValid then
                 ActiveMiningTarget = nil
                 if CurrentTween then
                     CurrentTween:Cancel()
                     CurrentTween = nil
                 end
                 IsTweening = false
+                
+                if AltFarmMiningActive then
+                    UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, nil, nil)
+                    AltFarmMiningActive = false
+                end
             end
 
-            if not ActiveMiningTarget then
+            -- Only find nearest rock if AutoMine is enabled (not for Main Alt waiting mode)
+            if not ActiveMiningTarget and AutoMineEnabled then
                 ActiveMiningTarget = FindNearestRock(500)
                 if ActiveMiningTarget then
                     FastTweenToRock(ActiveMiningTarget)
-                    AltFarmData.Status = "Moving to Rock"
                 end
             end
 
@@ -1216,7 +1194,9 @@ task.spawn(function()
                 
                 if dist > 30 and not IsTweening then
                     FastTweenToRock(ActiveMiningTarget)
-                    AltFarmData.Status = "Moving to Rock"
+                    if AltFarmMiningActive then
+                        UpdateAltFarmGUI("Moving to rock...", nil, dist, nil, nil)
+                    end
                 end
                 
                 if dist <= 30 then
@@ -1228,37 +1208,17 @@ task.spawn(function()
                 end
             end
         else
-            ActiveMiningTarget = nil
-            if CurrentTween then
-                CurrentTween:Cancel()
-                CurrentTween = nil
-            end
-            IsTweening = false
-            
-            if AltFarmEnabled then
-                AltFarmData.Status = "Waiting"
+            if not AltFarmMiningActive then
+                ActiveMiningTarget = nil
+                if CurrentTween then
+                    CurrentTween:Cancel()
+                    CurrentTween = nil
+                end
+                IsTweening = false
             end
         end
         
         task.wait()
-    end
-end)
-
--- Initialize Alt Farm GUI when enabled
-task.spawn(function()
-    while true do
-        if AltFarmEnabled and AltFarmGui == nil then
-            CreateAltFarmGui()
-            AddNotification("Alt Farm GUI initialized")
-            AddNotification("Mode: " .. AltFarmMode)
-            if MainAltName ~= "" then
-                AddNotification("Partner: " .. MainAltName)
-            end
-        elseif not AltFarmEnabled and AltFarmGui then
-            AltFarmGui:Destroy()
-            AltFarmGui = nil
-        end
-        task.wait(1)
     end
 end)
 
@@ -1271,30 +1231,24 @@ Tabs.Main:AddToggle("AutoMineToggle", {
     Callback = function(state)
         AutoMineEnabled = state
         if not state then
-            ActiveMiningTarget = nil
-            if CurrentTween then
-                CurrentTween:Cancel()
-                CurrentTween = nil
-            end
-            IsTweening = false
-            SetNoclip(false)
-            SetupCamera(false)
-            
-            local char = LocalPlayer.Character
-            local humanoid = char and char:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.PlatformStand = false
-            end
-            
-            if AltFarmEnabled then
-                AltFarmData.Status = "Auto Mine Disabled"
+            if not AltFarmMiningActive then
+                ActiveMiningTarget = nil
+                if CurrentTween then
+                    CurrentTween:Cancel()
+                    CurrentTween = nil
+                end
+                IsTweening = false
+                SetNoclip(false)
+                SetupCamera(false)
+                
+                local char = LocalPlayer.Character
+                local humanoid = char and char:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                end
             end
         else
             SetupCamera(true)
-            if AltFarmEnabled then
-                AltFarmData.Status = "Auto Mine Enabled"
-                AddNotification("Auto Mine started")
-            end
         end
     end
 })
@@ -1308,16 +1262,12 @@ Tabs.Main:AddToggle("MineBelowToggle", {
         SetNoclip(state)
         SetupCharacterHighlight(state)
         
-        if not state then
+        if not state and not AltFarmMiningActive then
             local char = LocalPlayer.Character
             local humanoid = char and char:FindFirstChild("Humanoid")
             if humanoid then
                 humanoid.PlatformStand = false
                 humanoid.Sit = false
-            end
-        else
-            if AltFarmEnabled then
-                AddNotification("Mine Below Target enabled")
             end
         end
         
@@ -1358,7 +1308,7 @@ MineDropdownRef = Tabs.Main:AddDropdown("MineTargetDropdown", {
             end
         end
         
-        if #MineTargets == 0 then
+        if #MineTargets == 0 and not AltFarmMiningActive then
             ActiveMiningTarget = nil
             if CurrentTween then
                 CurrentTween:Cancel()
@@ -1367,10 +1317,6 @@ MineDropdownRef = Tabs.Main:AddDropdown("MineTargetDropdown", {
             IsTweening = false
         else
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Mining targets updated: " .. table.concat(MineTargets, ", "))
         end
     end
 })
@@ -1381,9 +1327,6 @@ Tabs.Main:AddButton({
     Callback = function()
         RockTypes = GetRockTypes()
         MineDropdownRef:SetValues(RockTypes)
-        if AltFarmEnabled then
-            AddNotification("Mining targets refreshed")
-        end
     end
 })
 
@@ -1410,12 +1353,8 @@ local OreDropdownRef = Tabs.Main:AddDropdown("SkipOresDropdown", {
             end
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AltFarmMiningActive then
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Skip ores updated: " .. table.concat(SkipOres, ", "))
         end
     end
 })
@@ -1429,12 +1368,8 @@ Tabs.Main:AddDropdown("SkipLogicDropdown", {
     Callback = function(value)
         SkipLogic = value
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AltFarmMiningActive then
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Skip logic set to: " .. value)
         end
     end
 })
@@ -1446,19 +1381,15 @@ Tabs.Main:AddToggle("SkipOresToggle", {
     Callback = function(state)
         SkipOresEnabled = state
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AltFarmMiningActive then
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Skip ores " .. (state and "enabled" or "disabled"))
         end
     end
 })
 
 Tabs.Main:AddParagraph({
     Title = "Skip Logic Explained",
-    Content = "Skip If Any: Skips rock if it contains ANY selected ore (e.g., rock with Iron + Copper is skipped if Copper is selected)\n\nSkip If All: Only skips if ALL ores in the rock are selected (e.g., rock with Iron + Copper is mined if only Copper is selected)"
+    Content = "Skip If Any: Skips rock if it contains ANY selected ore\n\nSkip If All: Only skips if ALL ores in the rock are selected"
 })
 
 Tabs.Main:AddSection("Auto Farm Region")
@@ -1474,12 +1405,8 @@ Tabs.Main:AddToggle("AutoFarmRegionToggle", {
             SelectedRegions = {}
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AltFarmMiningActive then
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Region farming " .. (state and "enabled" or "disabled"))
         end
     end
 })
@@ -1505,12 +1432,8 @@ local RegionDropdownRef = Tabs.Main:AddDropdown("RegionTargetDropdown", {
             end
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AltFarmMiningActive then
             ActiveMiningTarget = nil
-        end
-        
-        if AltFarmEnabled then
-            AddNotification("Selected regions: " .. table.concat(SelectedRegions, ", "))
         end
     end
 })
@@ -1521,19 +1444,16 @@ Tabs.Main:AddButton({
     Callback = function()
         local newRegions = GetRegions()
         RegionDropdownRef:SetValues(newRegions)
-        if AltFarmEnabled then
-            AddNotification("Regions list refreshed")
-        end
     end
 })
 
 Tabs.Main:AddParagraph({
     Title = "Region Farming",
-    Content = "When enabled, auto mining will only target rocks within selected regions. Disable to mine in all regions."
+    Content = "When enabled, auto mining will only target rocks within selected regions."
 })
 
 -- Alt Farm Section
-Tabs.Main:AddSection("Alt Farm System")
+Tabs.Main:AddSection("🎯 Alt Farm System")
 
 Tabs.Main:AddToggle("AltFarmToggle", {
     Title = "Enable Alt Farm",
@@ -1543,42 +1463,35 @@ Tabs.Main:AddToggle("AltFarmToggle", {
         AltFarmEnabled = state
         
         if state then
-            NotifiedRocks = {}
-            MainAltCalledPosition = nil
-            AltFarmData = {
-                LastNotification = "",
-                Notifications = {},
-                Status = "Idle",
-                WhitelistOresFound = 0
-            }
+            if AltFarmMode == "Main Alt" then
+                CreateAltFarmGUI()
+                UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, nil, 0)
+            end
             
             Fluent:Notify({
-                Title = "Alt Farm Enabled",
-                Content = "Alt Farm mode: " .. AltFarmMode,
-                SubContent = AltFarmMode == "Helper Alt" and "Will notify main alt about whitelist ores" or "Waiting for helper alt notifications",
+                Title = "🎯 Alt Farm Enabled",
+                Content = "Mode: " .. AltFarmMode,
+                SubContent = AltFarmMode == "Helper Alt" and "Will notify via whisper" or "Listening for whispers",
                 Duration = 5
             })
-            
-            AddNotification("Alt Farm enabled")
-            AddNotification("Mode: " .. AltFarmMode)
         else
             NotifiedRocks = {}
             MainAltCalledPosition = nil
-            AltFarmData.Status = "Disabled"
+            AltFarmMiningActive = false
             
-            if AltFarmGui then
-                AltFarmGui:Destroy()
-                AltFarmGui = nil
+            if AltFarmGUI then
+                AltFarmGUI:Destroy()
+                AltFarmGUI = nil
             end
             
             Fluent:Notify({
                 Title = "Alt Farm Disabled",
-                Content = "Alt Farm system turned off",
+                Content = "System turned off",
                 Duration = 3
             })
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AutoMineEnabled then
             ActiveMiningTarget = nil
         end
     end
@@ -1593,27 +1506,26 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
     Callback = function(value)
         AltFarmMode = value
         
-        NotifiedRocks = {}
-        MainAltCalledPosition = nil
-        AltFarmData.Status = "Idle"
-        
-        if AltFarmGui then
-            AltFarmGui:Destroy()
-            AltFarmGui = nil
-        end
-        
-        if AltFarmEnabled then
-            CreateAltFarmGui()
+        if AltFarmEnabled and value == "Main Alt" then
+            CreateAltFarmGUI()
+            UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, nil, 0)
+        elseif AltFarmGUI then
+            AltFarmGUI:Destroy()
+            AltFarmGUI = nil
         end
         
         Fluent:Notify({
-            Title = "Alt Farm Mode Changed",
-            Content = "Now running as: " .. value,
-            SubContent = value == "Helper Alt" and "This account will find and notify" or "This account will receive notifications",
+            Title = "🎯 Mode Changed",
+            Content = "Now: " .. value,
+            SubContent = value == "Helper Alt" and "Will find and whisper" or "Will receive and mine",
             Duration = 4
         })
         
-        if ActiveMiningTarget then
+        NotifiedRocks = {}
+        MainAltCalledPosition = nil
+        AltFarmMiningActive = false
+        
+        if ActiveMiningTarget and not AutoMineEnabled then
             ActiveMiningTarget = nil
         end
     end
@@ -1621,7 +1533,7 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
 
 Tabs.Main:AddInput("AltNameInput", {
     Title = "Alt Account Name",
-    Description = "Enter the exact Roblox username",
+    Description = "Exact Roblox username",
     Default = "",
     Placeholder = "Username",
     Numeric = false,
@@ -1631,15 +1543,11 @@ Tabs.Main:AddInput("AltNameInput", {
         
         if Value ~= "" then
             Fluent:Notify({
-                Title = "Alt Name Set",
-                Content = "Partner account: " .. Value,
-                SubContent = AltFarmMode == "Helper Alt" and "Will send notifications to this account" or "Will listen for notifications from this account",
+                Title = "✅ Alt Name Set",
+                Content = "Partner: " .. Value,
+                SubContent = AltFarmMode == "Helper Alt" and "Will whisper this account" or "Will listen from this account",
                 Duration = 4
             })
-            
-            if AltFarmEnabled then
-                AddNotification("Partner account set to: " .. Value)
-            end
         end
     end
 })
@@ -1651,7 +1559,7 @@ end
 
 local WhitelistOreDropdownRef = Tabs.Main:AddDropdown("WhitelistOresDropdown", {
     Title = "Whitelist Ores",
-    Description = "Ores to notify main alt about",
+    Description = "Ores for alt farm",
     Values = whitelistOreTypes,
     Multi = true,
     Default = {""},
@@ -1670,18 +1578,13 @@ local WhitelistOreDropdownRef = Tabs.Main:AddDropdown("WhitelistOresDropdown", {
         if #WhitelistOres > 0 then
             local oreList = table.concat(WhitelistOres, ", ")
             Fluent:Notify({
-                Title = "Whitelist Ores Updated",
+                Title = "💎 Whitelist Updated",
                 Content = "Selected: " .. oreList,
-                SubContent = AltFarmMode == "Helper Alt" and "Will skip these and notify main" or "Will mine these when notified",
                 Duration = 5
             })
-            
-            if AltFarmEnabled then
-                AddNotification("Whitelist ores set: " .. oreList)
-            end
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AutoMineEnabled then
             ActiveMiningTarget = nil
         end
     end
@@ -1697,23 +1600,19 @@ Tabs.Main:AddToggle("WhitelistOresToggle", {
         
         if state then
             Fluent:Notify({
-                Title = "Whitelist Ores Enabled",
-                Content = AltFarmMode == "Helper Alt" and "Will skip and notify about selected ores" or "Ready to receive whitelist ore locations",
+                Title = "💎 Whitelist Enabled",
+                Content = AltFarmMode == "Helper Alt" and "Will skip and whisper" or "Ready to receive",
                 Duration = 4
             })
-            
-            if AltFarmEnabled then
-                AddNotification("Whitelist ores " .. (state and "enabled" or "disabled"))
-            end
         else
             Fluent:Notify({
-                Title = "Whitelist Ores Disabled",
+                Title = "Whitelist Disabled",
                 Content = "Normal mining resumed",
                 Duration = 3
             })
         end
         
-        if ActiveMiningTarget then
+        if ActiveMiningTarget and not AutoMineEnabled then
             ActiveMiningTarget = nil
         end
     end
@@ -1728,69 +1627,15 @@ Tabs.Main:AddButton({
         
         Fluent:Notify({
             Title = "Ores Refreshed",
-            Content = "Whitelist ore list updated",
+            Content = "List updated",
             Duration = 3
         })
-        
-        if AltFarmEnabled then
-            AddNotification("Whitelist ores list refreshed")
-        end
-    end
-})
-
-Tabs.Main:AddButton({
-    Title = "Show Alt Farm GUI",
-    Description = "Open Alt Farm monitoring window",
-    Callback = function()
-        if not AltFarmEnabled then
-            Fluent:Notify({
-                Title = "Alt Farm Disabled",
-                Content = "Please enable Alt Farm first",
-                Duration = 3
-            })
-            return
-        end
-        
-        if AltFarmGui then
-            AltFarmGui.Enabled = not AltFarmGui.Enabled
-            if AltFarmGui.Enabled then
-                AddNotification("GUI opened")
-            end
-        else
-            CreateAltFarmGui()
-            AddNotification("GUI created")
-        end
     end
 })
 
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guide",
-    Content = "Helper Alt: Mines normally but skips whitelist ores and notifies Main Alt.\n\nMain Alt: Receives notifications and teleports to mine whitelist ores.\n\nBoth accounts must be in the same game and have Auto Mine enabled!"
-})
-
--- Test button for whisper system
-Tabs.Main:AddButton({
-    Title = "Test Whisper System",
-    Description = "Test if whisper system is working",
-    Callback = function()
-        if not AltFarmEnabled or MainAltName == "" then
-            Fluent:Notify({
-                Title = "Test Failed",
-                Content = "Please enable Alt Farm and set alt name first",
-                Duration = 3
-            })
-            return
-        end
-        
-        local testPos = Vector3.new(0, 0, 0)
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            testPos = char.HumanoidRootPart.Position
-        end
-        
-        NotifyMainAlt(testPos, "TEST_ROCK")
-        AddNotification("Test notification sent to " .. MainAltName)
-    end
+    Title = "📖 Alt Farm Guide",
+    Content = "Helper Alt: Finds and WHISPERS Main Alt about whitelist ores.\n\nMain Alt: Auto-mines when whispered (NO Auto Mine needed!).\n\nBoth must be in same game!\n\nHelper will send private whispers, not global chat."
 })
 
 -- Auto Attack Tab
