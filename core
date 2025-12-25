@@ -174,6 +174,7 @@ local CurrentTween = nil
 local IsTweening = false
 local MineDistanceOffset = 4
 local MineTweenSpeed = 50
+local MainAltTweenSpeed = 25
 local MineDropdownRef = nil
 local MineBelowTarget = false
 local NoclipConnection = nil
@@ -882,20 +883,39 @@ local function FastTweenToRock(rock)
     
     local distance = (root.Position - goalCFrame.Position).Magnitude
     
+    -- Use slower speed for Main Alt in Alt Farm mode
+    local isMainAltMode = AltFarmEnabled and AltFarmMode == "Main Alt"
+    
     local tweenTime
-    if distance < 10 then
-        tweenTime = distance / 20
-    elseif distance < 30 then
-        tweenTime = distance / 30
-    elseif distance < 60 then
-        tweenTime = distance / 40
-    elseif distance < 100 then
-        tweenTime = distance / 50
+    if isMainAltMode then
+        -- Slower speeds for Main Alt
+        if distance < 10 then
+            tweenTime = distance / 15
+        elseif distance < 30 then
+            tweenTime = distance / 20
+        elseif distance < 60 then
+            tweenTime = distance / 25
+        elseif distance < 100 then
+            tweenTime = distance / 30
+        else
+            tweenTime = distance / 35
+        end
     else
-        tweenTime = distance / 60
+        -- Normal speeds for regular auto mine
+        if distance < 10 then
+            tweenTime = distance / 20
+        elseif distance < 30 then
+            tweenTime = distance / 30
+        elseif distance < 60 then
+            tweenTime = distance / 40
+        elseif distance < 100 then
+            tweenTime = distance / 50
+        else
+            tweenTime = distance / 60
+        end
     end
     
-    tweenTime = math.max(0.5, math.min(tweenTime, 8))
+    tweenTime = math.max(0.5, math.min(tweenTime, 12))
     
     local tweenInfo = TweenInfo.new(
         tweenTime,
@@ -1666,6 +1686,24 @@ Tabs.Main:AddInput("AltNameInput", {
     end
 })
 
+Tabs.Main:AddSlider("MainAltSpeedSlider", {
+    Title = "Main Alt Travel Speed",
+    Description = "Speed when moving to notified ores",
+    Default = 25,
+    Min = 10,
+    Max = 60,
+    Rounding = 0,
+    Callback = function(Value)
+        MainAltTweenSpeed = Value
+        
+        Fluent:Notify({
+            Title = "Speed Updated",
+            Content = "Main Alt speed: " .. Value,
+            Duration = 2
+        })
+    end
+})
+
 local whitelistOreTypes = GetOreTypes()
 if #whitelistOreTypes == 0 then
     whitelistOreTypes = {""}
@@ -1763,7 +1801,7 @@ Tabs.Main:AddButton({
 })
 
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm GuideDUDDU",
+    Title = "Alt Farm Guideju",
     Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nCooldown: 2 seconds between notifications to prevent spam."
 })
 
