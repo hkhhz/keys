@@ -246,6 +246,15 @@ end
 
 local function HasWhitelistOre(rockModel)
     if not WhitelistOresEnabled or #WhitelistOres == 0 then return false end
+    
+    -- Check rock name first
+    for _, whitelistOre in ipairs(WhitelistOres) do
+        if string.lower(rockModel.Name) == string.lower(whitelistOre) then
+            return true, rockModel.Name
+        end
+    end
+    
+    -- Then check ore models inside
     for _, child in ipairs(rockModel:GetDescendants()) do
         if child:IsA("Model") and child.Name == "Ore" then
             local oreType = child:GetAttribute("Ore")
@@ -507,36 +516,54 @@ local function NotifyMainAlt(rockPosition, oreName)
         return
     end
     
-    if not WhisperChannelOpened then OpenWhisperChannel() end
+    if not WhisperChannelOpened then 
+        OpenWhisperChannel()
+        task.wait(1)
+    end
     
     local message = string.format("WHITELISTROCK:%d,%d,%d:%s", 
         math.floor(rockPosition.X), math.floor(rockPosition.Y), math.floor(rockPosition.Z), oreName or "Unknown")
     
+    local sent = false
+    
+    -- Try legacy chat
     pcall(function()
-        local SayMessage = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents"):FindFirstChild("SayMessageRequest")
-        if SayMessage then
-            SayMessage:FireServer(message, "All")
-            Fluent:Notify({
-                Title = "Alt Farm - Helper",
-                Content = "✅ Sent to " .. MainAltName,
-                SubContent = oreName .. " found!",
-                Duration = 4
-            })
+        local DefaultChatEvents = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+        if DefaultChatEvents then
+            local SayMessage = DefaultChatEvents:FindFirstChild("SayMessageRequest")
+            if SayMessage then
+                SayMessage:FireServer(message, "All")
+                sent = true
+                print("SENT VIA LEGACY CHAT: " .. message)
+            end
         end
     end)
     
-    pcall(function()
-        local TextChatService = game:GetService("TextChatService")
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 2):SendAsync(message)
-            Fluent:Notify({
-                Title = "Alt Farm - Helper",
-                Content = "✅ Sent to " .. MainAltName,
-                SubContent = oreName .. " found!",
-                Duration = 4
-            })
-        end
-    end)
+    -- Try new chat
+    if not sent then
+        pcall(function()
+            local TextChatService = game:GetService("TextChatService")
+            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 2)
+                if generalChannel then
+                    generalChannel:SendAsync(message)
+                    sent = true
+                    print("SENT VIA NEW CHAT: " .. message)
+                end
+            end
+        end)
+    end
+    
+    if sent then
+        Fluent:Notify({
+            Title = "Alt Farm - Helper",
+            Content = "✅ Sent to " .. MainAltName,
+            SubContent = oreName .. " found!",
+            Duration = 4
+        })
+    else
+        print("FAILED TO SEND MESSAGE!")
+    end
 end
 
 local function SetupCharacterHighlight(enabled)
