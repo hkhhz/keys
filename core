@@ -201,7 +201,10 @@ local AltFarmOreLabel = nil
 local AltFarmDistanceLabel = nil
 local AltFarmPositionLabel = nil
 local AltFarmRockCountLabel = nil
+local AltFarmPlayerStatusLabel = nil
 local AltFarmMiningActive = false
+local IsPlayerInGame = false
+local WhisperChannelOpened = false
 
 local function GetOreTypes()
     local oreTypes = {}
@@ -241,6 +244,19 @@ local function GetRegions()
     
     table.sort(regions)
     return regions
+end
+
+local function CheckPlayerInGame()
+    if MainAltName == "" then
+        IsPlayerInGame = false
+        return false
+    end
+    
+    local Players = game:GetService("Players")
+    local player = Players:FindFirstChild(MainAltName)
+    
+    IsPlayerInGame = (player ~= nil)
+    return IsPlayerInGame
 end
 
 local function HasWhitelistOre(rockModel)
@@ -332,7 +348,7 @@ local function CreateAltFarmGUI()
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 350, 0, 200)
+    mainFrame.Size = UDim2.new(0, 350, 0, 230)
     mainFrame.Position = UDim2.new(0.5, -175, 0.02, 0)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     mainFrame.BorderSizePixel = 0
@@ -363,10 +379,22 @@ local function CreateAltFarmGUI()
     titleCorner.CornerRadius = UDim.new(0, 12)
     titleCorner.Parent = titleLabel
     
+    local playerStatusLabel = Instance.new("TextLabel")
+    playerStatusLabel.Name = "PlayerStatusLabel"
+    playerStatusLabel.Size = UDim2.new(1, -20, 0, 25)
+    playerStatusLabel.Position = UDim2.new(0, 10, 0, 52)
+    playerStatusLabel.BackgroundTransparency = 1
+    playerStatusLabel.Text = "👤 Helper Alt: Checking..."
+    playerStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    playerStatusLabel.TextSize = 13
+    playerStatusLabel.Font = Enum.Font.GothamBold
+    playerStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playerStatusLabel.Parent = mainFrame
+    
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
     statusLabel.Size = UDim2.new(1, -20, 0, 28)
-    statusLabel.Position = UDim2.new(0, 10, 0, 55)
+    statusLabel.Position = UDim2.new(0, 10, 0, 80)
     statusLabel.BackgroundTransparency = 1
     statusLabel.Text = "📡 Status: Waiting for helper alt..."
     statusLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
@@ -378,7 +406,7 @@ local function CreateAltFarmGUI()
     local oreLabel = Instance.new("TextLabel")
     oreLabel.Name = "OreLabel"
     oreLabel.Size = UDim2.new(1, -20, 0, 28)
-    oreLabel.Position = UDim2.new(0, 10, 0, 88)
+    oreLabel.Position = UDim2.new(0, 10, 0, 113)
     oreLabel.BackgroundTransparency = 1
     oreLabel.Text = "💎 Ore: None"
     oreLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
@@ -390,7 +418,7 @@ local function CreateAltFarmGUI()
     local distanceLabel = Instance.new("TextLabel")
     distanceLabel.Name = "DistanceLabel"
     distanceLabel.Size = UDim2.new(1, -20, 0, 25)
-    distanceLabel.Position = UDim2.new(0, 10, 0, 121)
+    distanceLabel.Position = UDim2.new(0, 10, 0, 146)
     distanceLabel.BackgroundTransparency = 1
     distanceLabel.Text = "📏 Distance: --"
     distanceLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
@@ -402,7 +430,7 @@ local function CreateAltFarmGUI()
     local positionLabel = Instance.new("TextLabel")
     positionLabel.Name = "PositionLabel"
     positionLabel.Size = UDim2.new(1, -20, 0, 25)
-    positionLabel.Position = UDim2.new(0, 10, 0, 148)
+    positionLabel.Position = UDim2.new(0, 10, 0, 173)
     positionLabel.BackgroundTransparency = 1
     positionLabel.Text = "📍 Position: --"
     positionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -414,7 +442,7 @@ local function CreateAltFarmGUI()
     local rockCountLabel = Instance.new("TextLabel")
     rockCountLabel.Name = "RockCountLabel"
     rockCountLabel.Size = UDim2.new(1, -20, 0, 22)
-    rockCountLabel.Position = UDim2.new(0, 10, 0, 173)
+    rockCountLabel.Position = UDim2.new(0, 10, 0, 201)
     rockCountLabel.BackgroundTransparency = 1
     rockCountLabel.Text = "⛏️ Rocks Found: 0"
     rockCountLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -429,6 +457,7 @@ local function CreateAltFarmGUI()
     AltFarmDistanceLabel = distanceLabel
     AltFarmPositionLabel = positionLabel
     AltFarmRockCountLabel = rockCountLabel
+    AltFarmPlayerStatusLabel = playerStatusLabel
 end
 
 local function UpdateAltFarmGUI(status, ore, distance, position, rockCount)
@@ -474,58 +503,147 @@ local function UpdateAltFarmGUI(status, ore, distance, position, rockCount)
     end
 end
 
+local function UpdatePlayerStatus()
+    if not AltFarmPlayerStatusLabel then return end
+    
+    if MainAltName == "" then
+        AltFarmPlayerStatusLabel.Text = "👤 Helper Alt: No name set"
+        AltFarmPlayerStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        return
+    end
+    
+    CheckPlayerInGame()
+    
+    if IsPlayerInGame then
+        AltFarmPlayerStatusLabel.Text = "👤 Helper Alt: " .. MainAltName .. " ✅ Online"
+        AltFarmPlayerStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        AltFarmPlayerStatusLabel.Text = "👤 Helper Alt: " .. MainAltName .. " ❌ Offline"
+        AltFarmPlayerStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end
+
+local function OpenWhisperChannel()
+    if WhisperChannelOpened or MainAltName == "" then
+        return
+    end
+    
+    if not CheckPlayerInGame() then
+        return
+    end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    
+    -- Open whisper channel once
+    local success = pcall(function()
+        local DefaultChatSystemChatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if DefaultChatSystemChatEvents then
+            local SayMessageRequest = DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+            if SayMessageRequest then
+                SayMessageRequest:FireServer("/w " .. MainAltName, "All")
+                WhisperChannelOpened = true
+                
+                task.wait(0.5)
+                
+                Fluent:Notify({
+                    Title = "Alt Farm - Helper",
+                    Content = "✅ Whisper channel opened with " .. MainAltName,
+                    SubContent = "Ready to send notifications!",
+                    Duration = 5
+                })
+            end
+        end
+    end)
+    
+    if not success then
+        local TextChatService = game:GetService("TextChatService")
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            pcall(function()
+                local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 2)
+                if generalChannel then
+                    generalChannel:SendAsync("/w " .. MainAltName)
+                    WhisperChannelOpened = true
+                    
+                    task.wait(0.5)
+                    
+                    Fluent:Notify({
+                        Title = "Alt Farm - Helper",
+                        Content = "✅ Whisper channel opened with " .. MainAltName,
+                        SubContent = "Ready to send notifications!",
+                        Duration = 5
+                    })
+                end
+            end)
+        end
+    end
+end
+
 local function NotifyMainAlt(rockPosition, oreName)
     if not AltFarmEnabled or AltFarmMode ~= "Helper Alt" or MainAltName == "" then
         return
     end
     
-    local Players = game:GetService("Players")
-    local TextChatService = game:GetService("TextChatService")
+    -- Check if player is in game
+    if not CheckPlayerInGame() then
+        Fluent:Notify({
+            Title = "Alt Farm - Helper",
+            Content = "❌ " .. MainAltName .. " is not in the game!",
+            SubContent = "Cannot send notification",
+            Duration = 5
+        })
+        WhisperChannelOpened = false
+        return
+    end
     
-    -- Create whisper message
-    local message = string.format("/w %s WHITELISTROCK:%d,%d,%d:%s", 
-        MainAltName,
+    -- Open whisper channel if not already opened
+    if not WhisperChannelOpened then
+        OpenWhisperChannel()
+    end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    
+    -- Create the message (without /w since channel is already open)
+    local message = string.format("WHITELISTROCK:%d,%d,%d:%s", 
         math.floor(rockPosition.X),
         math.floor(rockPosition.Y),
         math.floor(rockPosition.Z),
         oreName or "Unknown")
     
-    -- Try TextChatService first (new chat)
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        local success, err = pcall(function()
-            local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 5)
-            if generalChannel then
-                generalChannel:SendAsync(message)
-            end
-        end)
-        
-        if success then
-            Fluent:Notify({
-                Title = "Alt Farm - Helper",
-                Content = "✅ Whispered to " .. MainAltName,
-                SubContent = oreName .. " at " .. math.floor(rockPosition.X) .. ", " .. math.floor(rockPosition.Y) .. ", " .. math.floor(rockPosition.Z),
-                Duration = 4
-            })
-        end
-    else
-        -- Fallback to legacy chat
-        local success, err = pcall(function()
-            local ReplicatedStorage = game:GetService("ReplicatedStorage")
-            local SayMessageRequest = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    -- Send message in whisper channel
+    local success = pcall(function()
+        local DefaultChatSystemChatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if DefaultChatSystemChatEvents then
+            local SayMessageRequest = DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
             if SayMessageRequest then
-                SayMessageRequest = SayMessageRequest:FindFirstChild("SayMessageRequest")
-                if SayMessageRequest then
-                    SayMessageRequest:FireServer(message, "All")
+                SayMessageRequest:FireServer(message, "All")
+                
+                Fluent:Notify({
+                    Title = "Alt Farm - Helper",
+                    Content = "✅ Sent to " .. MainAltName,
+                    SubContent = oreName .. " at position!",
+                    Duration = 4
+                })
+            end
+        end
+    end)
+    
+    if not success then
+        local TextChatService = game:GetService("TextChatService")
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            pcall(function()
+                local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 2)
+                if generalChannel then
+                    generalChannel:SendAsync(message)
                     
                     Fluent:Notify({
                         Title = "Alt Farm - Helper",
-                        Content = "✅ Whispered to " .. MainAltName,
-                        SubContent = oreName .. " at position",
+                        Content = "✅ Sent to " .. MainAltName,
+                        SubContent = oreName .. " at position!",
                         Duration = 4
                     })
                 end
-            end
-        end)
+            end)
+        end
     end
 end
 
@@ -735,7 +853,7 @@ local function GetRockTypes()
     return rockTypes
 end
 
-local function FindNearestRock(maxDist)
+local function FindNearestRock(maxDist, skipWhitelist)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     
@@ -775,8 +893,8 @@ local function FindNearestRock(maxDist)
                         continue
                     end
                     
-                    -- Alt Farm Logic: Skip rocks with whitelist ores if Helper Alt
-                    if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
+                    -- Alt Farm Logic: Skip rocks with whitelist ores if Helper Alt and skipWhitelist is true
+                    if skipWhitelist and AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
                             local rockId = tostring(descendant.Parent)
@@ -965,20 +1083,53 @@ task.spawn(function()
     end
 end)
 
--- Main Alt GUI Distance Updater
+-- Main Alt GUI Updater (Distance and Player Status)
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.5)
         if AltFarmEnabled and AltFarmMode == "Main Alt" and AltFarmGUI then
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             
+            -- Update player status
+            UpdatePlayerStatus()
+            
+            -- Update distance
             if MainAltCalledPosition and root then
                 local distance = (root.Position - MainAltCalledPosition).Magnitude
                 UpdateAltFarmGUI(nil, nil, distance, nil, nil)
             elseif ActiveMiningTarget and ActiveMiningTarget.Parent and root then
                 local distance = (root.Position - ActiveMiningTarget.Position).Magnitude
                 UpdateAltFarmGUI(nil, nil, distance, nil, nil)
+            end
+        end
+    end
+end)
+
+-- Helper Alt Player Status Checker
+task.spawn(function()
+    while true do
+        task.wait(3)
+        if AltFarmEnabled and AltFarmMode == "Helper Alt" and MainAltName ~= "" then
+            local wasOnline = IsPlayerInGame
+            CheckPlayerInGame()
+            
+            if not wasOnline and IsPlayerInGame then
+                Fluent:Notify({
+                    Title = "Alt Farm - Helper",
+                    Content = "✅ " .. MainAltName .. " joined the game!",
+                    SubContent = "Opening whisper channel...",
+                    Duration = 4
+                })
+                WhisperChannelOpened = false
+                OpenWhisperChannel()
+            elseif wasOnline and not IsPlayerInGame then
+                Fluent:Notify({
+                    Title = "Alt Farm - Helper",
+                    Content = "❌ " .. MainAltName .. " left the game!",
+                    Duration = 4
+                })
+                WhisperChannelOpened = false
             end
         end
     end
@@ -1158,6 +1309,13 @@ task.spawn(function()
                                 if AltFarmMiningActive then
                                     UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, nil, nil)
                                     AltFarmMiningActive = false
+                                    
+                                    Fluent:Notify({
+                                        Title = "Alt Farm - Main Alt",
+                                        Content = "✅ Ore mined successfully!",
+                                        SubContent = "Waiting for next notification...",
+                                        Duration = 4
+                                    })
                                 end
                             end
                         else
@@ -1183,7 +1341,7 @@ task.spawn(function()
 
             -- Only find nearest rock if AutoMine is enabled (not for Main Alt waiting mode)
             if not ActiveMiningTarget and AutoMineEnabled then
-                ActiveMiningTarget = FindNearestRock(500)
+                ActiveMiningTarget = FindNearestRock(500, true)
                 if ActiveMiningTarget then
                     FastTweenToRock(ActiveMiningTarget)
                 end
@@ -1466,18 +1624,25 @@ Tabs.Main:AddToggle("AltFarmToggle", {
             if AltFarmMode == "Main Alt" then
                 CreateAltFarmGUI()
                 UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, nil, 0)
+                UpdatePlayerStatus()
+            elseif AltFarmMode == "Helper Alt" and MainAltName ~= "" then
+                WhisperChannelOpened = false
+                task.delay(1, function()
+                    OpenWhisperChannel()
+                end)
             end
             
             Fluent:Notify({
                 Title = "🎯 Alt Farm Enabled",
                 Content = "Mode: " .. AltFarmMode,
-                SubContent = AltFarmMode == "Helper Alt" and "Will notify via whisper" or "Listening for whispers",
+                SubContent = AltFarmMode == "Helper Alt" and "Will open whisper channel" or "Listening for whispers",
                 Duration = 5
             })
         else
             NotifiedRocks = {}
             MainAltCalledPosition = nil
             AltFarmMiningActive = false
+            WhisperChannelOpened = false
             
             if AltFarmGUI then
                 AltFarmGUI:Destroy()
@@ -1509,9 +1674,17 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
         if AltFarmEnabled and value == "Main Alt" then
             CreateAltFarmGUI()
             UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, nil, 0)
+            UpdatePlayerStatus()
+            WhisperChannelOpened = false
         elseif AltFarmGUI then
             AltFarmGUI:Destroy()
             AltFarmGUI = nil
+            if AltFarmEnabled and value == "Helper Alt" and MainAltName ~= "" then
+                WhisperChannelOpened = false
+                task.delay(1, function()
+                    OpenWhisperChannel()
+                end)
+            end
         end
         
         Fluent:Notify({
@@ -1540,6 +1713,7 @@ Tabs.Main:AddInput("AltNameInput", {
     Finished = true,
     Callback = function(Value)
         MainAltName = Value
+        WhisperChannelOpened = false
         
         if Value ~= "" then
             Fluent:Notify({
@@ -1548,6 +1722,16 @@ Tabs.Main:AddInput("AltNameInput", {
                 SubContent = AltFarmMode == "Helper Alt" and "Will whisper this account" or "Will listen from this account",
                 Duration = 4
             })
+            
+            if AltFarmEnabled and AltFarmMode == "Helper Alt" then
+                task.delay(1, function()
+                    OpenWhisperChannel()
+                end)
+            end
+            
+            if AltFarmEnabled and AltFarmMode == "Main Alt" then
+                UpdatePlayerStatus()
+            end
         end
     end
 })
@@ -1635,7 +1819,7 @@ Tabs.Main:AddButton({
 
 Tabs.Main:AddParagraph({
     Title = "📖 Alt Farm Guide",
-    Content = "Helper Alt: Finds and WHISPERS Main Alt about whitelist ores.\n\nMain Alt: Auto-mines when whispered (NO Auto Mine needed!).\n\nBoth must be in same game!\n\nHelper will send private whispers, not global chat."
+    Content = "Helper Alt: Opens whisper channel ONCE, then sends ore locations privately.\n\nMain Alt: Auto-mines when whispered (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nHelper will send private whispers using /w command."
 })
 
 -- Auto Attack Tab
