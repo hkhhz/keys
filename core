@@ -163,9 +163,8 @@ Tabs.Home:AddParagraph({
 
 
 
-
-
 -- Auto Mine Section
+
 
 local AutoMineEnabled = false
 local MineTargets = {}
@@ -654,7 +653,7 @@ local function GetRockTypes()
     return rockTypes
 end
 
-local function FindNearestRock(maxDist, skipWhitelist)
+local function FindNearestRock(maxDist)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     
@@ -690,7 +689,8 @@ local function FindNearestRock(maxDist, skipWhitelist)
                 if isTargetRock then
                     if SkipOresEnabled and HasSkippedOre(descendant.Parent) then continue end
                     
-                    if skipWhitelist and AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
+                    -- Alt Farm Logic: Check for whitelist ore if Helper Alt
+                    if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
                             local rockId = tostring(descendant.Parent)
@@ -889,12 +889,14 @@ end)
 -- Main Mining Loop
 task.spawn(function()
     while true do
+        task.wait()
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
         local shouldMine = AutoMineEnabled or AltFarmMiningActive
 
         if shouldMine and ToolActivated and root and humanoid then
+            -- Main Alt Mode: Priority check for called position
             if AltFarmMiningActive and MainAltCalledPosition then
                 local rocksFolder = Workspace:FindFirstChild("Rocks")
                 if rocksFolder then
@@ -946,6 +948,7 @@ task.spawn(function()
                 end
             end
             
+            -- Equip pickaxe
             local pickaxe = char:FindFirstChild("Pickaxe")
             if not pickaxe then
                 local backpackPick = LocalPlayer.Backpack:FindFirstChild("Pickaxe")
@@ -956,6 +959,7 @@ task.spawn(function()
                 end
             end
 
+            -- Check if target is valid
             local targetValid = false
             if ActiveMiningTarget and ActiveMiningTarget.Parent then
                 local isTarget = AltFarmMiningActive
@@ -969,44 +973,24 @@ task.spawn(function()
                 end
                 
                 if isTarget then
-                    if SkipOresEnabled and HasSkippedOre(ActiveMiningTarget.Parent) and not AltFarmMiningActive then
-                        targetValid = false
-                        ActiveMiningTarget = nil
-                    elseif AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
-                        local hasWhitelist = HasWhitelistOre(ActiveMiningTarget.Parent)
-                        if hasWhitelist then
-                            targetValid = false
-                            ActiveMiningTarget = nil
+                    local infoFrame = ActiveMiningTarget.Parent:FindFirstChild("infoFrame")
+                    local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
+                    if hpText then
+                        local hp = tonumber(hpText:match("^(%d+)"))
+                        if hp and hp > 0 then 
+                            targetValid = true
+                            if AltFarmMiningActive then
+                                UpdateAltFarmGUI("Mining ore...", nil, nil, nil, nil)
+                            end
                         else
-                            local infoFrame = ActiveMiningTarget.Parent:FindFirstChild("infoFrame")
-                            local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
-                            if hpText then
-                                local hp = tonumber(hpText:match("^(%d+)"))
-                                targetValid = (hp and hp > 0)
-                            else
-                                targetValid = true
+                            if AltFarmMiningActive then
+                                UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, nil, nil)
+                                AltFarmMiningActive = false
+                                Fluent:Notify({Title = "Alt Farm - Main Alt", Content = "✅ Ore mined!", Duration = 4})
                             end
                         end
                     else
-                        local infoFrame = ActiveMiningTarget.Parent:FindFirstChild("infoFrame")
-                        local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
-                        if hpText then
-                            local hp = tonumber(hpText:match("^(%d+)"))
-                            if hp and hp > 0 then 
-                                targetValid = true
-                                if AltFarmMiningActive then
-                                    UpdateAltFarmGUI("Mining ore...", nil, nil, nil, nil)
-                                end
-                            else
-                                if AltFarmMiningActive then
-                                    UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, nil, nil)
-                                    AltFarmMiningActive = false
-                                    Fluent:Notify({Title = "Alt Farm - Main Alt", Content = "✅ Ore mined!", Duration = 4})
-                                end
-                            end
-                        else
-                            targetValid = true
-                        end
+                        targetValid = true
                     end
                 end
             end
@@ -1024,13 +1008,15 @@ task.spawn(function()
                 end
             end
 
+            -- Find nearest rock if AutoMine is enabled
             if not ActiveMiningTarget and AutoMineEnabled then
-                ActiveMiningTarget = FindNearestRock(500, true)
+                ActiveMiningTarget = FindNearestRock(500)
                 if ActiveMiningTarget then
                     FastTweenToRock(ActiveMiningTarget)
                 end
             end
 
+            -- Mine the rock
             if pickaxe and ActiveMiningTarget and humanoid.Health > 0 and ActiveMiningTarget.Parent then
                 local dist = (root.Position - ActiveMiningTarget.Position).Magnitude
                 if dist > 30 and not IsTweening then
@@ -1055,7 +1041,6 @@ task.spawn(function()
                 IsTweening = false
             end
         end
-        task.wait()
     end
 end)
 
@@ -1265,7 +1250,7 @@ Tabs.Main:AddButton({Title = "Refresh Whitelist Ores", Callback = function()
     Fluent:Notify({Title = "Ores Refreshed", Content = "List updated", Duration = 3})
 end})
 
-Tabs.Main:AddParagraph({Title = "📖 Alt Farm Guide", Content = "Helper Alt: Opens whisper channel ONCE, then sends ore locations privately.\n\nMain Alt: Auto-mines when whispered (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nHelper will send private whispers using /w command."})
+Tabs.Main:AddParagraph({Title = "📖 Alt Farm Guide", Content = "Helper Alt: Opens whisper ONCE, mines normally, skips whitelist ores and sends notifications.\n\nMain Alt: Auto-mines when whispered (Auto Mine can be OFF!).\n\nBoth must be in same game!"})
 
 -- Auto Attack Tab
 local AutoAttackEnabled = false
