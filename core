@@ -519,7 +519,7 @@ local function NotifyMainAlt(rockPosition, oreName)
             Fluent:Notify({
                 Title = "Alt Farm - Helper",
                 Content = "✅ Sent to " .. MainAltName,
-                SubContent = oreName .. " at position!",
+                SubContent = oreName .. " found!",
                 Duration = 4
             })
         end
@@ -532,7 +532,7 @@ local function NotifyMainAlt(rockPosition, oreName)
             Fluent:Notify({
                 Title = "Alt Farm - Helper",
                 Content = "✅ Sent to " .. MainAltName,
-                SubContent = oreName .. " at position!",
+                SubContent = oreName .. " found!",
                 Duration = 4
             })
         end
@@ -659,7 +659,7 @@ local function FindNearestRock(maxDist)
     
     local root = char.HumanoidRootPart
     local closestRock = nil
-    local bestDist = maxDist or 15
+    local bestDist = maxDist or 500
     local rocksFolder = Workspace:FindFirstChild("Rocks")
 
     if not rocksFolder or #MineTargets == 0 then return nil end
@@ -687,9 +687,12 @@ local function FindNearestRock(maxDist)
                 end
                 
                 if isTargetRock then
-                    if SkipOresEnabled and HasSkippedOre(descendant.Parent) then continue end
+                    -- Skip ore check
+                    if SkipOresEnabled and HasSkippedOre(descendant.Parent) then 
+                        continue 
+                    end
                     
-                    -- Alt Farm Logic: Check for whitelist ore if Helper Alt
+                    -- HELPER ALT: Check whitelist and notify, then SKIP this rock
                     if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
@@ -698,10 +701,11 @@ local function FindNearestRock(maxDist)
                                 NotifiedRocks[rockId] = true
                                 NotifyMainAlt(descendant.Position, oreName)
                             end
-                            continue
+                            continue  -- SKIP THIS ROCK - DON'T MINE IT
                         end
                     end
                     
+                    -- Check HP
                     local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
                     local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
                     local isValid = true
@@ -1154,8 +1158,7 @@ local RegionDropdownRef = Tabs.Main:AddDropdown("RegionTargetDropdown", {Title =
 end})
 
 Tabs.Main:AddButton({Title = "Refresh Regions", Callback = function()
-    local newRegions = GetRegions()
-    RegionDropdownRef:SetValues(newRegions)
+    RegionDropdownRef:SetValues(GetRegions())
 end})
 
 Tabs.Main:AddParagraph({Title = "Region Farming", Content = "When enabled, auto mining will only target rocks within selected regions."})
@@ -1180,7 +1183,7 @@ Tabs.Main:AddToggle("AltFarmToggle", {Title = "Enable Alt Farm", Default = false
         AltFarmMiningActive = false
         WhisperChannelOpened = false
         if AltFarmGUI then AltFarmGUI:Destroy() AltFarmGUI = nil end
-        Fluent:Notify({Title = "Alt Farm Disabled", Content = "System turned off", Duration = 3})
+        Fluent:Notify({Title = "Alt Farm Disabled", Duration = 3})
     end
     if ActiveMiningTarget and not AutoMineEnabled then ActiveMiningTarget = nil end
 end})
@@ -1250,7 +1253,7 @@ Tabs.Main:AddButton({Title = "Refresh Whitelist Ores", Callback = function()
     Fluent:Notify({Title = "Ores Refreshed", Content = "List updated", Duration = 3})
 end})
 
-Tabs.Main:AddParagraph({Title = "📖 Alt Farm Guide", Content = "Helper Alt: Opens whisper ONCE, mines normally, skips whitelist ores and sends notifications.\n\nMain Alt: Auto-mines when whispered (Auto Mine can be OFF!).\n\nBoth must be in same game!"})
+Tabs.Main:AddParagraph({Title = "📖 Alt Farm Guide", Content = "Helper Alt: Finds whitelist ores, SKIPS THEM, whispers Main Alt, then continues mining other rocks.\n\nMain Alt: Receives whisper, auto-mines the whitelist ore (Auto Mine can be OFF!).\n\nBoth must be in same game!"})
 
 -- Auto Attack Tab
 local AutoAttackEnabled = false
