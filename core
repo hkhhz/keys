@@ -163,9 +163,9 @@ Tabs.Home:AddParagraph({
 
 
 
+
+
 -- Auto Mine Section
-
-
 local AutoMineEnabled = false
 local MineTargets = {}
 local ActiveMiningTarget = nil
@@ -174,7 +174,6 @@ local CurrentTween = nil
 local IsTweening = false
 local MineDistanceOffset = 4
 local MineTweenSpeed = 50
-local MainAltTweenSpeed = 25
 local MineDropdownRef = nil
 local MineBelowTarget = false
 local NoclipConnection = nil
@@ -205,33 +204,7 @@ local AltFarmRockCountLabel = nil
 local AltFarmModeLabel = nil
 local IsMovingToWhitelistRock = false
 local LastNotificationTime = 0
-local NotificationCooldown = 0.5 -- Much faster with RemoteEvent!
-
--- RemoteEvent Communication
-local ReplicaSignal = nil
-local CommunicationMethod = "RemoteEvent" -- or "Chat"
-
-local function InitializeRemoteEvent()
-    local success, result = pcall(function()
-        return game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
-    end)
-    
-    if success and result then
-        local signal = result:FindFirstChild("ReplicaSignal")
-        if signal and signal:IsA("RemoteEvent") then
-            ReplicaSignal = signal
-            CommunicationMethod = "RemoteEvent"
-            print("[ALT FARM] Using RemoteEvent communication (FAST & HIDDEN)")
-            return true
-        end
-    end
-    
-    -- Fallback to chat
-    CommunicationMethod = "Chat"
-    NotificationCooldown = 2
-    print("[ALT FARM] Using Chat communication (VISIBLE)")
-    return false
-end
+local NotificationCooldown = 2 -- Seconds between notifications
 
 local function GetOreTypes()
     local oreTypes = {}
@@ -362,8 +335,8 @@ local function CreateAltFarmGUI()
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 340, 0, 220)
-    mainFrame.Position = UDim2.new(0.5, -170, 0.02, 0)
+    mainFrame.Size = UDim2.new(0, 320, 0, 200)
+    mainFrame.Position = UDim2.new(0.5, -160, 0.02, 0)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
@@ -405,22 +378,10 @@ local function CreateAltFarmGUI()
     modeLabel.TextXAlignment = Enum.TextXAlignment.Left
     modeLabel.Parent = mainFrame
     
-    local commLabel = Instance.new("TextLabel")
-    commLabel.Name = "CommLabel"
-    commLabel.Size = UDim2.new(1, -20, 0, 22)
-    commLabel.Position = UDim2.new(0, 10, 0, 80)
-    commLabel.BackgroundTransparency = 1
-    commLabel.Text = "📡 Method: " .. CommunicationMethod
-    commLabel.TextColor3 = CommunicationMethod == "RemoteEvent" and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 200, 100)
-    commLabel.TextSize = 12
-    commLabel.Font = Enum.Font.GothamMedium
-    commLabel.TextXAlignment = Enum.TextXAlignment.Left
-    commLabel.Parent = mainFrame
-    
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
     statusLabel.Size = UDim2.new(1, -20, 0, 28)
-    statusLabel.Position = UDim2.new(0, 10, 0, 105)
+    statusLabel.Position = UDim2.new(0, 10, 0, 80)
     statusLabel.BackgroundTransparency = 1
     statusLabel.Text = "📡 Status: Waiting for helper alt..."
     statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -432,7 +393,7 @@ local function CreateAltFarmGUI()
     local oreLabel = Instance.new("TextLabel")
     oreLabel.Name = "OreLabel"
     oreLabel.Size = UDim2.new(1, -20, 0, 28)
-    oreLabel.Position = UDim2.new(0, 10, 0, 137)
+    oreLabel.Position = UDim2.new(0, 10, 0, 112)
     oreLabel.BackgroundTransparency = 1
     oreLabel.Text = "💎 Ore: None"
     oreLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
@@ -444,7 +405,7 @@ local function CreateAltFarmGUI()
     local distanceLabel = Instance.new("TextLabel")
     distanceLabel.Name = "DistanceLabel"
     distanceLabel.Size = UDim2.new(1, -20, 0, 26)
-    distanceLabel.Position = UDim2.new(0, 10, 0, 169)
+    distanceLabel.Position = UDim2.new(0, 10, 0, 144)
     distanceLabel.BackgroundTransparency = 1
     distanceLabel.Text = "📍 Distance: --"
     distanceLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
@@ -456,7 +417,7 @@ local function CreateAltFarmGUI()
     local rockCountLabel = Instance.new("TextLabel")
     rockCountLabel.Name = "RockCountLabel"
     rockCountLabel.Size = UDim2.new(1, -20, 0, 24)
-    rockCountLabel.Position = UDim2.new(0, 10, 0, 194)
+    rockCountLabel.Position = UDim2.new(0, 10, 0, 172)
     rockCountLabel.BackgroundTransparency = 1
     rockCountLabel.Text = "🪨 Rocks Notified: 0"
     rockCountLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
@@ -527,11 +488,14 @@ local function NotifyMainAlt(rockPosition, oreName)
         return
     end
     
-    -- Check cooldown
+    -- Check cooldown to prevent spam
     local currentTime = tick()
     if currentTime - LastNotificationTime < NotificationCooldown then
         return
     end
+    
+    local Players = game:GetService("Players")
+    local TextChatService = game:GetService("TextChatService")
     
     local message = string.format("WHITELISTROCK:%s,%s,%s:%s", 
         tostring(math.floor(rockPosition.X)),
@@ -541,46 +505,9 @@ local function NotifyMainAlt(rockPosition, oreName)
     
     local messageSent = false
     
-    -- Try RemoteEvent first (BEST METHOD) - Try multiple formats
-    if CommunicationMethod == "RemoteEvent" and ReplicaSignal then
-        -- Try Method 1: Table with data
-        local success1 = pcall(function()
-            ReplicaSignal:FireServer({
-                Type = "AltFarm",
-                Data = message,
-                Sender = game.Players.LocalPlayer.Name
-            })
-        end)
-        
-        -- Try Method 2: Direct message string
-        local success2 = pcall(function()
-            ReplicaSignal:FireServer(message)
-        end)
-        
-        -- Try Method 3: With target player name
-        local success3 = pcall(function()
-            ReplicaSignal:FireServer("AltFarm", message, MainAltName)
-        end)
-        
-        if success1 or success2 or success3 then
-            messageSent = true
-            LastNotificationTime = currentTime
-            Fluent:Notify({
-                Title = "Alt Farm - Helper [RemoteEvent]",
-                Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
-                SubContent = "Instant & Hidden",
-                Duration = 3
-            })
-            return
-        end
-    end
-    
-    -- Fallback to Chat
-    local Players = game:GetService("Players")
-    local TextChatService = game:GetService("TextChatService")
-    
+    -- Try TextChatService first (new chat)
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        local success = pcall(function()
+        local success, err = pcall(function()
             local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 5)
             if generalChannel then
                 generalChannel:SendAsync(message)
@@ -591,13 +518,14 @@ local function NotifyMainAlt(rockPosition, oreName)
         if success and messageSent then
             LastNotificationTime = currentTime
             Fluent:Notify({
-                Title = "Alt Farm - Helper [Chat]",
+                Title = "Alt Farm - Helper",
                 Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
                 Duration = 3
             })
         end
     else
-        local success = pcall(function()
+        -- Fallback to legacy chat
+        local success, err = pcall(function()
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
             local SayMessageRequest = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
             if SayMessageRequest then
@@ -612,7 +540,7 @@ local function NotifyMainAlt(rockPosition, oreName)
         if success and messageSent then
             LastNotificationTime = currentTime
             Fluent:Notify({
-                Title = "Alt Farm - Helper [Chat]",
+                Title = "Alt Farm - Helper",
                 Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
                 Duration = 3
             })
@@ -866,14 +794,17 @@ local function FindNearestRock(maxDist)
                         continue
                     end
                     
+                    -- Alt Farm Logic: Check for whitelist ores if Helper Alt
                     if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
+                            -- Create unique ID using rock position
                             local rockId = string.format("%.0f_%.0f_%.0f", 
                                 descendant.Position.X, 
                                 descendant.Position.Y, 
                                 descendant.Position.Z)
                             
+                            -- Only notify if not already notified AND rock still has HP
                             local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
                             local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
                             
@@ -882,6 +813,7 @@ local function FindNearestRock(maxDist)
                                 local hp = tonumber(hpText:match("^(%d+)"))
                                 if not hp or hp <= 0 then 
                                     rockHasHP = false
+                                    -- Clear from notified list if rock is depleted
                                     NotifiedRocks[rockId] = nil
                                 end
                             end
@@ -950,23 +882,29 @@ local function FastTweenToRock(rock)
     
     local distance = (root.Position - goalCFrame.Position).Magnitude
     
-    -- Use slower speed for Main Alt in Alt Farm mode
+    -- Check if this is Main Alt mode for slower, smoother movement
     local isMainAltMode = AltFarmEnabled and AltFarmMode == "Main Alt"
     
     local tweenTime
     if isMainAltMode then
-        -- Slower speeds for Main Alt
-        if distance < 10 then
-            tweenTime = distance / 15
-        elseif distance < 30 then
-            tweenTime = distance / 20
-        elseif distance < 60 then
-            tweenTime = distance / 25
+        -- Much slower speeds for Main Alt to ensure smooth, visible movement
+        -- Base speed: ~20 studs/second for close distances, scaling down for longer distances
+        if distance < 20 then
+            tweenTime = distance / 15  -- Very slow for close rocks
+        elseif distance < 50 then
+            tweenTime = distance / 18
         elseif distance < 100 then
-            tweenTime = distance / 30
+            tweenTime = distance / 20
+        elseif distance < 200 then
+            tweenTime = distance / 22
+        elseif distance < 400 then
+            tweenTime = distance / 24
         else
-            tweenTime = distance / 35
+            tweenTime = distance / 25
         end
+        
+        -- Ensure minimum time for very smooth movement
+        tweenTime = math.max(tweenTime, 1.5)
     else
         -- Normal speeds for regular auto mine
         if distance < 10 then
@@ -980,14 +918,21 @@ local function FastTweenToRock(rock)
         else
             tweenTime = distance / 60
         end
+        
+        tweenTime = math.max(0.5, tweenTime)
     end
     
-    tweenTime = math.max(0.5, math.min(tweenTime, 12))
+    -- Cap maximum time to prevent extremely long tweens
+    tweenTime = math.min(tweenTime, 20)
+    
+    -- Use smoother easing for Main Alt
+    local easingStyle = isMainAltMode and Enum.EasingStyle.Sine or Enum.EasingStyle.Linear
+    local easingDirection = isMainAltMode and Enum.EasingDirection.InOut or Enum.EasingDirection.InOut
     
     local tweenInfo = TweenInfo.new(
         tweenTime,
-        Enum.EasingStyle.Linear,
-        Enum.EasingDirection.InOut,
+        easingStyle,
+        easingDirection,
         0,
         false,
         0
@@ -1004,16 +949,17 @@ local function FastTweenToRock(rock)
     CurrentTween:Play()
 end
 
--- Clean up notified rocks periodically
+-- Clean up notified rocks periodically (remove depleted rocks from tracking)
 task.spawn(function()
     while true do
-        task.wait(10)
+        task.wait(10) -- Check every 10 seconds
         
         if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
             local rocksFolder = Workspace:FindFirstChild("Rocks")
             if rocksFolder then
                 local activeRockIds = {}
                 
+                -- Build list of active rocks with HP
                 for _, region in ipairs(rocksFolder:GetChildren()) do
                     for _, descendant in ipairs(region:GetDescendants()) do
                         if descendant.Name == "Hitbox" and descendant:IsA("BasePart") and descendant.Parent then
@@ -1035,6 +981,7 @@ task.spawn(function()
                     end
                 end
                 
+                -- Remove depleted rocks from notification tracking
                 for rockId, _ in pairs(NotifiedRocks) do
                     if not activeRockIds[rockId] then
                         NotifiedRocks[rockId] = nil
@@ -1045,105 +992,14 @@ task.spawn(function()
     end
 end)
 
--- Listen for RemoteEvent messages (Main Alt Mode)
-task.spawn(function()
-    InitializeRemoteEvent()
-    
-    if ReplicaSignal and CommunicationMethod == "RemoteEvent" then
-        print("[ALT FARM] Main Alt listening for RemoteEvent on:", ReplicaSignal:GetFullName())
-        
-        ReplicaSignal.OnClientEvent:Connect(function(...)
-            local args = {...}
-            
-            if not AltFarmEnabled or AltFarmMode ~= "Main Alt" then
-                return
-            end
-            
-            print("[ALT FARM] Main Alt received RemoteEvent data:", table.concat(args, ", "))
-            
-            local message = nil
-            
-            -- Try to extract message from different formats
-            -- Format 1: Table with Type and Data
-            if type(args[1]) == "table" and args[1].Type == "AltFarm" then
-                message = args[1].Data
-                print("[ALT FARM] Format 1 - Table detected")
-            -- Format 2: Direct string message
-            elseif type(args[1]) == "string" and args[1]:match("^WHITELISTROCK:") then
-                message = args[1]
-                print("[ALT FARM] Format 2 - Direct string detected")
-            -- Format 3: Second argument is the message
-            elseif type(args[2]) == "string" and args[2]:match("^WHITELISTROCK:") then
-                message = args[2]
-                print("[ALT FARM] Format 3 - Second argument detected")
-            -- Format 4: Scan all arguments for WHITELISTROCK
-            else
-                for i, arg in ipairs(args) do
-                    if type(arg) == "string" and arg:match("^WHITELISTROCK:") then
-                        message = arg
-                        print("[ALT FARM] Format 4 - Found in argument", i)
-                        break
-                    end
-                end
-            end
-            
-            if message and message:match("^WHITELISTROCK:") then
-                print("[ALT FARM] Processing message:", message)
-                
-                local extractedData = message:match("WHITELISTROCK:(.+)")
-                if extractedData then
-                    local coords, oreName = extractedData:match("([^:]+):(.+)")
-                    if coords then
-                        local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
-                        if x and y and z then
-                            MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-                            MainAltCalledOreName = oreName or "Unknown"
-                            IsMovingToWhitelistRock = true
-                            
-                            print("[ALT FARM] Success! Position:", MainAltCalledPosition, "Ore:", MainAltCalledOreName)
-                            
-                            UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
-                            
-                            Fluent:Notify({
-                                Title = "Alt Farm - Main Alt [RemoteEvent]",
-                                Content = "Received " .. MainAltCalledOreName .. " location!",
-                                SubContent = "Moving to location... (INSTANT)",
-                                Duration = 5
-                            })
-                            
-                            ActiveMiningTarget = nil
-                            
-                            MineBelowTarget = true
-                            SetNoclip(true)
-                            SetupCharacterHighlight(true)
-                            if not AutoMineEnabled then
-                                SetupCamera(true)
-                            end
-                        else
-                            print("[ALT FARM] Failed to parse coordinates:", coords)
-                        end
-                    else
-                        print("[ALT FARM] Failed to extract coords and ore:", extractedData)
-                    end
-                else
-                    print("[ALT FARM] Failed to extract data from message:", message)
-                end
-            else
-                print("[ALT FARM] No valid WHITELISTROCK message found in:", table.concat(args, ", "))
-            end
-        end)
-    else
-        print("[ALT FARM] Main Alt using Chat fallback - RemoteEvent not available")
-    end
-end)
-
--- Listen for Chat messages (Main Alt Mode - Fallback)
+-- Listen for messages from Helper Alt (Main Alt Mode)
 task.spawn(function()
     local TextChatService = game:GetService("TextChatService")
+    local Players = game:GetService("Players")
     
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         TextChatService.MessageReceived:Connect(function(message)
-            if AltFarmEnabled and AltFarmMode == "Main Alt" and CommunicationMethod == "Chat" then
+            if AltFarmEnabled and AltFarmMode == "Main Alt" then
                 local text = message.Text
                 
                 if text:match("^WHITELISTROCK:") then
@@ -1160,7 +1016,7 @@ task.spawn(function()
                                 UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
                                 
                                 Fluent:Notify({
-                                    Title = "Alt Farm - Main Alt [Chat]",
+                                    Title = "Alt Farm - Main Alt",
                                     Content = "Received " .. MainAltCalledOreName .. " location!",
                                     SubContent = "Moving to location...",
                                     Duration = 5
@@ -1168,6 +1024,7 @@ task.spawn(function()
                                 
                                 ActiveMiningTarget = nil
                                 
+                                -- Force enable mining features
                                 MineBelowTarget = true
                                 SetNoclip(true)
                                 SetupCharacterHighlight(true)
@@ -1186,7 +1043,7 @@ task.spawn(function()
         local OnMessageDoneFiltering = DefaultChatSystemChatEvents:WaitForChild("OnMessageDoneFiltering")
         
         OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
-            if AltFarmEnabled and AltFarmMode == "Main Alt" and CommunicationMethod == "Chat" then
+            if AltFarmEnabled and AltFarmMode == "Main Alt" then
                 local message = messageData.Message
                 
                 if message:match("^WHITELISTROCK:") then
@@ -1203,7 +1060,7 @@ task.spawn(function()
                                 UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
                                 
                                 Fluent:Notify({
-                                    Title = "Alt Farm - Main Alt [Chat]",
+                                    Title = "Alt Farm - Main Alt",
                                     Content = "Received " .. MainAltCalledOreName .. " location!",
                                     SubContent = "Moving to location...",
                                     Duration = 5
@@ -1211,6 +1068,7 @@ task.spawn(function()
                                 
                                 ActiveMiningTarget = nil
                                 
+                                -- Force enable mining features
                                 MineBelowTarget = true
                                 SetNoclip(true)
                                 SetupCharacterHighlight(true)
@@ -1245,6 +1103,7 @@ task.spawn(function()
                     UpdateAltFarmGUI(nil, nil, "--", nil, nil)
                 end
                 
+                -- Update rock count
                 local notifiedCount = 0
                 for _ in pairs(NotifiedRocks) do
                     notifiedCount = notifiedCount + 1
@@ -1262,6 +1121,7 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
         
+        -- Check if we should be mining (either AutoMine enabled OR Main Alt with called position)
         local shouldMine = AutoMineEnabled or (AltFarmEnabled and AltFarmMode == "Main Alt" and (MainAltCalledPosition or ActiveMiningTarget))
         
         if shouldMine and MineBelowTarget and root and humanoid and ActiveMiningTarget and ActiveMiningTarget.Parent then
@@ -1300,9 +1160,11 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
 
+        -- Check if we should be mining (either AutoMine enabled OR Main Alt with called position)
         local shouldMine = AutoMineEnabled or (AltFarmEnabled and AltFarmMode == "Main Alt" and (MainAltCalledPosition or ActiveMiningTarget))
 
         if shouldMine and ToolActivated and root and humanoid then
+            -- Main Alt Mode: Priority check for called position
             if AltFarmEnabled and AltFarmMode == "Main Alt" and MainAltCalledPosition and IsMovingToWhitelistRock then
                 local rocksFolder = Workspace:FindFirstChild("Rocks")
                 if rocksFolder then
@@ -1363,6 +1225,7 @@ task.spawn(function()
             if ActiveMiningTarget and ActiveMiningTarget.Parent then
                 local isTarget = false
                 
+                -- For Main Alt mode, we don't check MineTargets
                 if AltFarmEnabled and AltFarmMode == "Main Alt" then
                     isTarget = true
                 else
@@ -1437,6 +1300,7 @@ task.spawn(function()
                 end
             end
 
+            -- Only find nearest rock if AutoMine is enabled (not for Main Alt waiting mode)
             if not ActiveMiningTarget and AutoMineEnabled then
                 ActiveMiningTarget = FindNearestRock(500)
                 if ActiveMiningTarget then
@@ -1728,8 +1592,6 @@ Tabs.Main:AddToggle("AltFarmToggle", {
         AltFarmEnabled = state
         
         if state then
-            InitializeRemoteEvent()
-            
             if AltFarmMode == "Main Alt" then
                 CreateAltFarmGUI()
                 UpdateAltFarmGUI("Waiting for helper alt...", "None", "--", "Standby", 0)
@@ -1738,7 +1600,7 @@ Tabs.Main:AddToggle("AltFarmToggle", {
             Fluent:Notify({
                 Title = "Alt Farm Enabled",
                 Content = "Mode: " .. AltFarmMode,
-                SubContent = "Method: " .. CommunicationMethod,
+                SubContent = AltFarmMode == "Helper Alt" and "Will notify main alt" or "Waiting for notifications",
                 Duration = 5
             })
         else
@@ -1833,24 +1695,6 @@ Tabs.Main:AddInput("AltNameInput", {
                 Duration = 4
             })
         end
-    end
-})
-
-Tabs.Main:AddSlider("MainAltSpeedSlider", {
-    Title = "Main Alt Travel Speed",
-    Description = "Speed when moving to notified ores",
-    Default = 25,
-    Min = 10,
-    Max = 60,
-    Rounding = 0,
-    Callback = function(Value)
-        MainAltTweenSpeed = Value
-        
-        Fluent:Notify({
-            Title = "Speed Updated",
-            Content = "Main Alt speed: " .. Value,
-            Duration = 2
-        })
     end
 })
 
@@ -1950,73 +1794,9 @@ Tabs.Main:AddButton({
     end
 })
 
-Tabs.Main:AddButton({
-    Title = "Test Communication",
-    Description = "Check if RemoteEvent works",
-    Callback = function()
-        if CommunicationMethod == "RemoteEvent" and ReplicaSignal then
-            Fluent:Notify({
-                Title = "Communication Test",
-                Content = "✅ RemoteEvent ACTIVE",
-                SubContent = "Using: " .. ReplicaSignal:GetFullName(),
-                Duration = 5
-            })
-        else
-            Fluent:Notify({
-                Title = "Communication Test",
-                Content = "⚠️ Using Chat Fallback",
-                SubContent = "RemoteEvent not available",
-                Duration = 5
-            })
-        end
-    end
-})
-
-Tabs.Main:AddButton({
-    Title = "Enable Debug Mode",
-    Description = "Show detailed console logs",
-    Callback = function()
-        -- Enable detailed logging
-        if ReplicaSignal then
-            print("=== ALT FARM DEBUG MODE ===")
-            print("Communication Method:", CommunicationMethod)
-            print("RemoteEvent Path:", ReplicaSignal:GetFullName())
-            print("Alt Farm Mode:", AltFarmMode)
-            print("Alt Farm Enabled:", AltFarmEnabled)
-            print("Main Alt Name:", MainAltName)
-            print("Whitelist Ores Enabled:", WhitelistOresEnabled)
-            print("Whitelist Ores:", table.concat(WhitelistOres, ", "))
-            print("========================")
-            
-            -- Test fire if Helper Alt
-            if AltFarmMode == "Helper Alt" then
-                print("[TEST] Sending test notification...")
-                pcall(function()
-                    ReplicaSignal:FireServer("WHITELISTROCK:100,100,100:TestOre")
-                end)
-                print("[TEST] Test notification sent via RemoteEvent")
-            end
-            
-            Fluent:Notify({
-                Title = "Debug Mode Enabled",
-                Content = "Check console (F9) for details",
-                SubContent = "Mode: " .. AltFarmMode,
-                Duration = 5
-            })
-        else
-            Fluent:Notify({
-                Title = "Debug Mode",
-                Content = "❌ RemoteEvent not found",
-                SubContent = "Using chat fallback",
-                Duration = 5
-            })
-        end
-    end
-})
-
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guide - BEddST VERSION!",
-    Content = "🔥 USING REMOTEEVENT = INSTANT & HIDDEN!\n\nHelper Alt: Mines normally, notifies Main Alt instantly via RemoteEvent (no chat spam!)\n\nMain Alt: Receives instant notifications and auto-mines\n\nCooldown: 0.5 seconds (RemoteEvent) vs 2 seconds (Chat)\n\nClick 'Test Communication' to check your method!"
+    Title = "Alt Farm Guidexz",
+    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nMain Alt moves smoothly and gradually to notified rocks.\n\nCooldown: 2 seconds between notifications to prevent spam."
 })
 
 -- Auto Attack Tab
@@ -4135,6 +3915,9 @@ Tabs.Player:AddToggle("MyToggle", {
 local savedSpeed = 50
 
 local function setupFlySystem()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
     local player = Players.LocalPlayer
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
@@ -4561,8 +4344,6 @@ Toggle:OnChanged(function(state)
 end)
 
 --envirnomnet
-
-
 
 
 -- Background tasks
