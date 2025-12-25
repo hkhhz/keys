@@ -203,6 +203,8 @@ local AltFarmDistanceLabel = nil
 local AltFarmRockCountLabel = nil
 local AltFarmModeLabel = nil
 local IsMovingToWhitelistRock = false
+local LastNotificationTime = 0
+local NotificationCooldown = 2 -- Seconds between notifications
 
 local function GetOreTypes()
     local oreTypes = {}
@@ -486,6 +488,12 @@ local function NotifyMainAlt(rockPosition, oreName)
         return
     end
     
+    -- Check cooldown to prevent spam
+    local currentTime = tick()
+    if currentTime - LastNotificationTime < NotificationCooldown then
+        return
+    end
+    
     local Players = game:GetService("Players")
     local TextChatService = game:GetService("TextChatService")
     
@@ -495,16 +503,20 @@ local function NotifyMainAlt(rockPosition, oreName)
         tostring(math.floor(rockPosition.Z)),
         oreName or "Unknown")
     
+    local messageSent = false
+    
     -- Try TextChatService first (new chat)
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         local success, err = pcall(function()
             local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 5)
             if generalChannel then
                 generalChannel:SendAsync(message)
+                messageSent = true
             end
         end)
         
-        if success then
+        if success and messageSent then
+            LastNotificationTime = currentTime
             Fluent:Notify({
                 Title = "Alt Farm - Helper",
                 Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
@@ -520,15 +532,19 @@ local function NotifyMainAlt(rockPosition, oreName)
                 SayMessageRequest = SayMessageRequest:FindFirstChild("SayMessageRequest")
                 if SayMessageRequest then
                     SayMessageRequest:FireServer(message, "All")
-                    
-                    Fluent:Notify({
-                        Title = "Alt Farm - Helper",
-                        Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
-                        Duration = 3
-                    })
+                    messageSent = true
                 end
             end
         end)
+        
+        if success and messageSent then
+            LastNotificationTime = currentTime
+            Fluent:Notify({
+                Title = "Alt Farm - Helper",
+                Content = "Notified " .. MainAltName .. " about " .. (oreName or "ore") .. "!",
+                Duration = 3
+            })
+        end
     end
 end
 
@@ -778,12 +794,31 @@ local function FindNearestRock(maxDist)
                         continue
                     end
                     
-                    -- Alt Farm Logic: Skip rocks with whitelist ores if Helper Alt
+                    -- Alt Farm Logic: Check for whitelist ores if Helper Alt
                     if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
-                            local rockId = tostring(descendant.Parent)
-                            if not NotifiedRocks[rockId] then
+                            -- Create unique ID using rock position
+                            local rockId = string.format("%.0f_%.0f_%.0f", 
+                                descendant.Position.X, 
+                                descendant.Position.Y, 
+                                descendant.Position.Z)
+                            
+                            -- Only notify if not already notified AND rock still has HP
+                            local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
+                            local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
+                            
+                            local rockHasHP = true
+                            if hpText then
+                                local hp = tonumber(hpText:match("^(%d+)"))
+                                if not hp or hp <= 0 then 
+                                    rockHasHP = false
+                                    -- Clear from notified list if rock is depleted
+                                    NotifiedRocks[rockId] = nil
+                                end
+                            end
+                            
+                            if rockHasHP and not NotifiedRocks[rockId] then
                                 NotifiedRocks[rockId] = true
                                 NotifyMainAlt(descendant.Position, oreName)
                             end
@@ -881,6 +916,49 @@ local function FastTweenToRock(rock)
     
     CurrentTween:Play()
 end
+
+-- Clean up notified rocks periodically (remove depleted rocks from tracking)
+task.spawn(function()
+    while true do
+        task.wait(10) -- Check every 10 seconds
+        
+        if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
+            local rocksFolder = Workspace:FindFirstChild("Rocks")
+            if rocksFolder then
+                local activeRockIds = {}
+                
+                -- Build list of active rocks with HP
+                for _, region in ipairs(rocksFolder:GetChildren()) do
+                    for _, descendant in ipairs(region:GetDescendants()) do
+                        if descendant.Name == "Hitbox" and descendant:IsA("BasePart") and descendant.Parent then
+                            local rockId = string.format("%.0f_%.0f_%.0f", 
+                                descendant.Position.X, 
+                                descendant.Position.Y, 
+                                descendant.Position.Z)
+                            
+                            local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
+                            local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
+                            
+                            if hpText then
+                                local hp = tonumber(hpText:match("^(%d+)"))
+                                if hp and hp > 0 then
+                                    activeRockIds[rockId] = true
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                -- Remove depleted rocks from notification tracking
+                for rockId, _ in pairs(NotifiedRocks) do
+                    if not activeRockIds[rockId] then
+                        NotifiedRocks[rockId] = nil
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- Listen for messages from Helper Alt (Main Alt Mode)
 task.spawn(function()
@@ -1498,6 +1576,7 @@ Tabs.Main:AddToggle("AltFarmToggle", {
             MainAltCalledPosition = nil
             MainAltCalledOreName = ""
             IsMovingToWhitelistRock = false
+            LastNotificationTime = 0
             
             if AltFarmGUI then
                 AltFarmGUI:Destroy()
@@ -1558,6 +1637,7 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
         MainAltCalledPosition = nil
         MainAltCalledOreName = ""
         IsMovingToWhitelistRock = false
+        LastNotificationTime = 0
         
         if not AutoMineEnabled then
             ActiveMiningTarget = nil
@@ -1667,9 +1747,24 @@ Tabs.Main:AddButton({
     end
 })
 
+Tabs.Main:AddButton({
+    Title = "Clear Notified Rocks",
+    Description = "Reset notification tracking",
+    Callback = function()
+        NotifiedRocks = {}
+        LastNotificationTime = 0
+        
+        Fluent:Notify({
+            Title = "Tracking Cleared",
+            Content = "All rocks can be notified again",
+            Duration = 3
+        })
+    end
+})
+
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guide3",
-    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification."
+    Title = "Alt Farm GuideDUDDU",
+    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nCooldown: 2 seconds between notifications to prevent spam."
 })
 
 -- Auto Attack Tab
