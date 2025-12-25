@@ -882,29 +882,23 @@ local function FastTweenToRock(rock)
     
     local distance = (root.Position - goalCFrame.Position).Magnitude
     
-    -- Check if this is Main Alt mode for slower, smoother movement
+    -- Use slower speed for Main Alt in Alt Farm mode
     local isMainAltMode = AltFarmEnabled and AltFarmMode == "Main Alt"
     
     local tweenTime
     if isMainAltMode then
-        -- Much slower speeds for Main Alt to ensure smooth, visible movement
-        -- Base speed: ~20 studs/second for close distances, scaling down for longer distances
-        if distance < 20 then
-            tweenTime = distance / 15  -- Very slow for close rocks
-        elseif distance < 50 then
-            tweenTime = distance / 18
+        -- Slower speeds for Main Alt (divide by smaller numbers = slower movement)
+        if distance < 10 then
+            tweenTime = distance / 10
+        elseif distance < 30 then
+            tweenTime = distance / 12
+        elseif distance < 60 then
+            tweenTime = distance / 15
         elseif distance < 100 then
-            tweenTime = distance / 20
-        elseif distance < 200 then
-            tweenTime = distance / 22
-        elseif distance < 400 then
-            tweenTime = distance / 24
+            tweenTime = distance / 18
         else
-            tweenTime = distance / 25
+            tweenTime = distance / 20
         end
-        
-        -- Ensure minimum time for very smooth movement
-        tweenTime = math.max(tweenTime, 1.5)
     else
         -- Normal speeds for regular auto mine
         if distance < 10 then
@@ -918,21 +912,14 @@ local function FastTweenToRock(rock)
         else
             tweenTime = distance / 60
         end
-        
-        tweenTime = math.max(0.5, tweenTime)
     end
     
-    -- Cap maximum time to prevent extremely long tweens
-    tweenTime = math.min(tweenTime, 20)
-    
-    -- Use smoother easing for Main Alt
-    local easingStyle = isMainAltMode and Enum.EasingStyle.Sine or Enum.EasingStyle.Linear
-    local easingDirection = isMainAltMode and Enum.EasingDirection.InOut or Enum.EasingDirection.InOut
+    tweenTime = math.max(0.5, math.min(tweenTime, 12))
     
     local tweenInfo = TweenInfo.new(
         tweenTime,
-        easingStyle,
-        easingDirection,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.InOut,
         0,
         false,
         0
@@ -1795,8 +1782,8 @@ Tabs.Main:AddButton({
 })
 
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guidexz",
-    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nMain Alt moves smoothly and gradually to notified rocks.\n\nCooldown: 2 seconds between notifications to prevent spam."
+    Title = "Alt Farm Guide",
+    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nMain Alt moves slower than normal auto mine for smoother travel.\n\nCooldown: 2 seconds between notifications to prevent spam."
 })
 
 -- Auto Attack Tab
