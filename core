@@ -541,18 +541,29 @@ local function NotifyMainAlt(rockPosition, oreName)
     
     local messageSent = false
     
-    -- Try RemoteEvent first (BEST METHOD)
+    -- Try RemoteEvent first (BEST METHOD) - Try multiple formats
     if CommunicationMethod == "RemoteEvent" and ReplicaSignal then
-        local success = pcall(function()
+        -- Try Method 1: Table with data
+        local success1 = pcall(function()
             ReplicaSignal:FireServer({
                 Type = "AltFarm",
                 Data = message,
                 Sender = game.Players.LocalPlayer.Name
             })
-            messageSent = true
         end)
         
-        if success and messageSent then
+        -- Try Method 2: Direct message string
+        local success2 = pcall(function()
+            ReplicaSignal:FireServer(message)
+        end)
+        
+        -- Try Method 3: With target player name
+        local success3 = pcall(function()
+            ReplicaSignal:FireServer("AltFarm", message, MainAltName)
+        end)
+        
+        if success1 or success2 or success3 then
+            messageSent = true
             LastNotificationTime = currentTime
             Fluent:Notify({
                 Title = "Alt Farm - Helper [RemoteEvent]",
@@ -1039,46 +1050,90 @@ task.spawn(function()
     InitializeRemoteEvent()
     
     if ReplicaSignal and CommunicationMethod == "RemoteEvent" then
-        ReplicaSignal.OnClientEvent:Connect(function(data)
-            if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                if type(data) == "table" and data.Type == "AltFarm" then
-                    local message = data.Data
-                    
-                    if message and message:match("^WHITELISTROCK:") then
-                        local extractedData = message:match("WHITELISTROCK:(.+)")
-                        if extractedData then
-                            local coords, oreName = extractedData:match("([^:]+):(.+)")
-                            if coords then
-                                local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
-                                if x and y and z then
-                                    MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-                                    MainAltCalledOreName = oreName or "Unknown"
-                                    IsMovingToWhitelistRock = true
-                                    
-                                    UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
-                                    
-                                    Fluent:Notify({
-                                        Title = "Alt Farm - Main Alt [RemoteEvent]",
-                                        Content = "Received " .. MainAltCalledOreName .. " location!",
-                                        SubContent = "Moving to location... (INSTANT)",
-                                        Duration = 5
-                                    })
-                                    
-                                    ActiveMiningTarget = nil
-                                    
-                                    MineBelowTarget = true
-                                    SetNoclip(true)
-                                    SetupCharacterHighlight(true)
-                                    if not AutoMineEnabled then
-                                        SetupCamera(true)
-                                    end
-                                end
-                            end
-                        end
+        print("[ALT FARM] Main Alt listening for RemoteEvent on:", ReplicaSignal:GetFullName())
+        
+        ReplicaSignal.OnClientEvent:Connect(function(...)
+            local args = {...}
+            
+            if not AltFarmEnabled or AltFarmMode ~= "Main Alt" then
+                return
+            end
+            
+            print("[ALT FARM] Main Alt received RemoteEvent data:", table.concat(args, ", "))
+            
+            local message = nil
+            
+            -- Try to extract message from different formats
+            -- Format 1: Table with Type and Data
+            if type(args[1]) == "table" and args[1].Type == "AltFarm" then
+                message = args[1].Data
+                print("[ALT FARM] Format 1 - Table detected")
+            -- Format 2: Direct string message
+            elseif type(args[1]) == "string" and args[1]:match("^WHITELISTROCK:") then
+                message = args[1]
+                print("[ALT FARM] Format 2 - Direct string detected")
+            -- Format 3: Second argument is the message
+            elseif type(args[2]) == "string" and args[2]:match("^WHITELISTROCK:") then
+                message = args[2]
+                print("[ALT FARM] Format 3 - Second argument detected")
+            -- Format 4: Scan all arguments for WHITELISTROCK
+            else
+                for i, arg in ipairs(args) do
+                    if type(arg) == "string" and arg:match("^WHITELISTROCK:") then
+                        message = arg
+                        print("[ALT FARM] Format 4 - Found in argument", i)
+                        break
                     end
                 end
             end
+            
+            if message and message:match("^WHITELISTROCK:") then
+                print("[ALT FARM] Processing message:", message)
+                
+                local extractedData = message:match("WHITELISTROCK:(.+)")
+                if extractedData then
+                    local coords, oreName = extractedData:match("([^:]+):(.+)")
+                    if coords then
+                        local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
+                        if x and y and z then
+                            MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+                            MainAltCalledOreName = oreName or "Unknown"
+                            IsMovingToWhitelistRock = true
+                            
+                            print("[ALT FARM] Success! Position:", MainAltCalledPosition, "Ore:", MainAltCalledOreName)
+                            
+                            UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
+                            
+                            Fluent:Notify({
+                                Title = "Alt Farm - Main Alt [RemoteEvent]",
+                                Content = "Received " .. MainAltCalledOreName .. " location!",
+                                SubContent = "Moving to location... (INSTANT)",
+                                Duration = 5
+                            })
+                            
+                            ActiveMiningTarget = nil
+                            
+                            MineBelowTarget = true
+                            SetNoclip(true)
+                            SetupCharacterHighlight(true)
+                            if not AutoMineEnabled then
+                                SetupCamera(true)
+                            end
+                        else
+                            print("[ALT FARM] Failed to parse coordinates:", coords)
+                        end
+                    else
+                        print("[ALT FARM] Failed to extract coords and ore:", extractedData)
+                    end
+                else
+                    print("[ALT FARM] Failed to extract data from message:", message)
+                end
+            else
+                print("[ALT FARM] No valid WHITELISTROCK message found in:", table.concat(args, ", "))
+            end
         end)
+    else
+        print("[ALT FARM] Main Alt using Chat fallback - RemoteEvent not available")
     end
 end)
 
@@ -1917,8 +1972,50 @@ Tabs.Main:AddButton({
     end
 })
 
+Tabs.Main:AddButton({
+    Title = "Enable Debug Mode",
+    Description = "Show detailed console logs",
+    Callback = function()
+        -- Enable detailed logging
+        if ReplicaSignal then
+            print("=== ALT FARM DEBUG MODE ===")
+            print("Communication Method:", CommunicationMethod)
+            print("RemoteEvent Path:", ReplicaSignal:GetFullName())
+            print("Alt Farm Mode:", AltFarmMode)
+            print("Alt Farm Enabled:", AltFarmEnabled)
+            print("Main Alt Name:", MainAltName)
+            print("Whitelist Ores Enabled:", WhitelistOresEnabled)
+            print("Whitelist Ores:", table.concat(WhitelistOres, ", "))
+            print("========================")
+            
+            -- Test fire if Helper Alt
+            if AltFarmMode == "Helper Alt" then
+                print("[TEST] Sending test notification...")
+                pcall(function()
+                    ReplicaSignal:FireServer("WHITELISTROCK:100,100,100:TestOre")
+                end)
+                print("[TEST] Test notification sent via RemoteEvent")
+            end
+            
+            Fluent:Notify({
+                Title = "Debug Mode Enabled",
+                Content = "Check console (F9) for details",
+                SubContent = "Mode: " .. AltFarmMode,
+                Duration = 5
+            })
+        else
+            Fluent:Notify({
+                Title = "Debug Mode",
+                Content = "❌ RemoteEvent not found",
+                SubContent = "Using chat fallback",
+                Duration = 5
+            })
+        end
+    end
+})
+
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guide - BEST VERSION!",
+    Title = "Alt Farm Guide - BEddST VERSION!",
     Content = "🔥 USING REMOTEEVENT = INSTANT & HIDDEN!\n\nHelper Alt: Mines normally, notifies Main Alt instantly via RemoteEvent (no chat spam!)\n\nMain Alt: Receives instant notifications and auto-mines\n\nCooldown: 0.5 seconds (RemoteEvent) vs 2 seconds (Chat)\n\nClick 'Test Communication' to check your method!"
 })
 
