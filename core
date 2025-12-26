@@ -166,6 +166,7 @@ Tabs.Home:AddParagraph({
 
 
 -- Auto Mine Section
+
 local AutoMineEnabled = false
 local MineTargets = {}
 local ActiveMiningTarget = nil
@@ -204,7 +205,17 @@ local AltFarmRockCountLabel = nil
 local AltFarmModeLabel = nil
 local IsMovingToWhitelistRock = false
 local LastNotificationTime = 0
-local NotificationCooldown = 2 -- Seconds between notifications
+local NotificationCooldown = 2
+
+-- Priority System Variables
+local PausedAutoMineTarget = nil
+local AutoMineWasPaused = false
+
+-- GUI Dragging Variables
+local dragging = false
+local dragInput
+local dragStart
+local startPos
 
 local function GetOreTypes()
     local oreTypes = {}
@@ -335,96 +346,188 @@ local function CreateAltFarmGUI()
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 320, 0, 200)
-    mainFrame.Position = UDim2.new(0.5, -160, 0.02, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    mainFrame.Size = UDim2.new(0, 260, 0, 140)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.05, 0)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = false
     mainFrame.Parent = screenGui
     
     local uiCorner = Instance.new("UICorner")
-    uiCorner.CornerRadius = UDim.new(0, 12)
+    uiCorner.CornerRadius = UDim.new(0, 6)
     uiCorner.Parent = mainFrame
     
     local uiStroke = Instance.new("UIStroke")
-    uiStroke.Color = Color3.fromRGB(60, 60, 70)
-    uiStroke.Thickness = 2
+    uiStroke.Color = Color3.fromRGB(50, 50, 60)
+    uiStroke.Thickness = 1
     uiStroke.Parent = mainFrame
+    
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 6)
+    titleCorner.Parent = titleBar
+    
+    local titleBarCover = Instance.new("Frame")
+    titleBarCover.Size = UDim2.new(1, 0, 0, 15)
+    titleBarCover.Position = UDim2.new(0, 0, 1, -15)
+    titleBarCover.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    titleBarCover.BorderSizePixel = 0
+    titleBarCover.Parent = titleBar
     
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(1, 0, 0, 45)
-    titleLabel.Position = UDim2.new(0, 0, 0, 0)
-    titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    titleLabel.BorderSizePixel = 0
-    titleLabel.Text = "⛏️ Alt Farm - Main Alt"
-    titleLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-    titleLabel.TextSize = 20
+    titleLabel.Size = UDim2.new(1, -40, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "ALT FARM"
+    titleLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+    titleLabel.TextSize = 12
     titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Parent = mainFrame
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = titleBar
     
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 12)
-    titleCorner.Parent = titleLabel
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0, 20, 0, 20)
+    closeButton.Position = UDim2.new(1, -25, 0, 5)
+    closeButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "×"
+    closeButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+    closeButton.TextSize = 16
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.Parent = titleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 3)
+    closeCorner.Parent = closeButton
+    
+    closeButton.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        AltFarmGUI = nil
+    end)
+    
+    closeButton.MouseEnter:Connect(function()
+        closeButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end)
+    
+    closeButton.MouseLeave:Connect(function()
+        closeButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    end)
+    
+    -- Make draggable
+    local function updateInput(input)
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    titleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            updateInput(input)
+        end
+    end)
+    
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Size = UDim2.new(1, -20, 1, -40)
+    contentFrame.Position = UDim2.new(0, 10, 0, 35)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Parent = mainFrame
     
     local modeLabel = Instance.new("TextLabel")
     modeLabel.Name = "ModeLabel"
-    modeLabel.Size = UDim2.new(1, -20, 0, 25)
-    modeLabel.Position = UDim2.new(0, 10, 0, 52)
+    modeLabel.Size = UDim2.new(1, 0, 0, 16)
+    modeLabel.Position = UDim2.new(0, 0, 0, 0)
     modeLabel.BackgroundTransparency = 1
-    modeLabel.Text = "🎯 Mode: Standby"
-    modeLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
-    modeLabel.TextSize = 13
-    modeLabel.Font = Enum.Font.GothamMedium
+    modeLabel.Text = "MODE: Standby"
+    modeLabel.TextColor3 = Color3.fromRGB(140, 140, 150)
+    modeLabel.TextSize = 10
+    modeLabel.Font = Enum.Font.Gotham
     modeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    modeLabel.Parent = mainFrame
+    modeLabel.Parent = contentFrame
     
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(1, -20, 0, 28)
-    statusLabel.Position = UDim2.new(0, 10, 0, 80)
+    statusLabel.Size = UDim2.new(1, 0, 0, 18)
+    statusLabel.Position = UDim2.new(0, 0, 0, 20)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "📡 Status: Waiting for helper alt..."
-    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    statusLabel.TextSize = 14
-    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Text = "STATUS: Waiting for notification"
+    statusLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+    statusLabel.TextSize = 11
+    statusLabel.Font = Enum.Font.GothamMedium
     statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = mainFrame
+    statusLabel.Parent = contentFrame
+    
+    local divider1 = Instance.new("Frame")
+    divider1.Size = UDim2.new(1, 0, 0, 1)
+    divider1.Position = UDim2.new(0, 0, 0, 42)
+    divider1.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    divider1.BorderSizePixel = 0
+    divider1.Parent = contentFrame
     
     local oreLabel = Instance.new("TextLabel")
     oreLabel.Name = "OreLabel"
-    oreLabel.Size = UDim2.new(1, -20, 0, 28)
-    oreLabel.Position = UDim2.new(0, 10, 0, 112)
+    oreLabel.Size = UDim2.new(1, 0, 0, 16)
+    oreLabel.Position = UDim2.new(0, 0, 0, 48)
     oreLabel.BackgroundTransparency = 1
-    oreLabel.Text = "💎 Ore: None"
-    oreLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-    oreLabel.TextSize = 14
-    oreLabel.Font = Enum.Font.GothamBold
+    oreLabel.Text = "TARGET: None"
+    oreLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
+    oreLabel.TextSize = 10
+    oreLabel.Font = Enum.Font.GothamMedium
     oreLabel.TextXAlignment = Enum.TextXAlignment.Left
-    oreLabel.Parent = mainFrame
+    oreLabel.Parent = contentFrame
     
     local distanceLabel = Instance.new("TextLabel")
     distanceLabel.Name = "DistanceLabel"
-    distanceLabel.Size = UDim2.new(1, -20, 0, 26)
-    distanceLabel.Position = UDim2.new(0, 10, 0, 144)
+    distanceLabel.Size = UDim2.new(1, 0, 0, 16)
+    distanceLabel.Position = UDim2.new(0, 0, 0, 66)
     distanceLabel.BackgroundTransparency = 1
-    distanceLabel.Text = "📍 Distance: --"
-    distanceLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-    distanceLabel.TextSize = 13
+    distanceLabel.Text = "DISTANCE: --"
+    distanceLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
+    distanceLabel.TextSize = 10
     distanceLabel.Font = Enum.Font.Gotham
     distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
-    distanceLabel.Parent = mainFrame
+    distanceLabel.Parent = contentFrame
     
     local rockCountLabel = Instance.new("TextLabel")
     rockCountLabel.Name = "RockCountLabel"
-    rockCountLabel.Size = UDim2.new(1, -20, 0, 24)
-    rockCountLabel.Position = UDim2.new(0, 10, 0, 172)
+    rockCountLabel.Size = UDim2.new(1, 0, 0, 16)
+    rockCountLabel.Position = UDim2.new(0, 0, 0, 84)
     rockCountLabel.BackgroundTransparency = 1
-    rockCountLabel.Text = "🪨 Rocks Notified: 0"
-    rockCountLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-    rockCountLabel.TextSize = 12
+    rockCountLabel.Text = "NOTIFIED: 0"
+    rockCountLabel.TextColor3 = Color3.fromRGB(140, 140, 150)
+    rockCountLabel.TextSize = 9
     rockCountLabel.Font = Enum.Font.Gotham
     rockCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-    rockCountLabel.Parent = mainFrame
+    rockCountLabel.Parent = contentFrame
     
     AltFarmGUI = screenGui
     AltFarmStatusLabel = statusLabel
@@ -438,48 +541,48 @@ local function UpdateAltFarmGUI(status, ore, distance, mode, rockCount)
     if not AltFarmGUI then return end
     
     if status and AltFarmStatusLabel then
-        AltFarmStatusLabel.Text = "📡 Status: " .. status
+        AltFarmStatusLabel.Text = "STATUS: " .. status
         if status:find("Mining") or status:find("Moving") then
-            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        elseif status:find("Waiting") then
-            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(100, 220, 120)
+        elseif status:find("Waiting") or status:find("Paused") then
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(220, 180, 100)
         else
-            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            AltFarmStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
         end
     end
     
     if ore and AltFarmOreLabel then
-        AltFarmOreLabel.Text = "💎 Ore: " .. ore
+        AltFarmOreLabel.Text = "TARGET: " .. ore
         if ore ~= "None" and ore ~= "Searching..." then
-            AltFarmOreLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+            AltFarmOreLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
         else
-            AltFarmOreLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+            AltFarmOreLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
         end
     end
     
     if distance and AltFarmDistanceLabel then
         local distNum = tonumber(distance)
         if distNum then
-            AltFarmDistanceLabel.Text = string.format("📍 Distance: %.1f studs", distNum)
+            AltFarmDistanceLabel.Text = string.format("DISTANCE: %.1f studs", distNum)
             if distNum < 30 then
-                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(100, 220, 120)
             elseif distNum < 100 then
-                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(220, 180, 100)
             else
-                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
             end
         else
-            AltFarmDistanceLabel.Text = "📍 Distance: --"
-            AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+            AltFarmDistanceLabel.Text = "DISTANCE: --"
+            AltFarmDistanceLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
         end
     end
     
     if mode and AltFarmModeLabel then
-        AltFarmModeLabel.Text = "🎯 Mode: " .. mode
+        AltFarmModeLabel.Text = "MODE: " .. mode
     end
     
     if rockCount and AltFarmRockCountLabel then
-        AltFarmRockCountLabel.Text = "🪨 Rocks Notified: " .. rockCount
+        AltFarmRockCountLabel.Text = "NOTIFIED: " .. rockCount
     end
 end
 
@@ -488,7 +591,6 @@ local function NotifyMainAlt(rockPosition, oreName)
         return
     end
     
-    -- Check cooldown to prevent spam
     local currentTime = tick()
     if currentTime - LastNotificationTime < NotificationCooldown then
         return
@@ -505,7 +607,6 @@ local function NotifyMainAlt(rockPosition, oreName)
     
     local messageSent = false
     
-    -- Try TextChatService first (new chat)
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         local success, err = pcall(function()
             local generalChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral", 5)
@@ -524,7 +625,6 @@ local function NotifyMainAlt(rockPosition, oreName)
             })
         end
     else
-        -- Fallback to legacy chat
         local success, err = pcall(function()
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
             local SayMessageRequest = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
@@ -794,17 +894,14 @@ local function FindNearestRock(maxDist)
                         continue
                     end
                     
-                    -- Alt Farm Logic: Check for whitelist ores if Helper Alt
                     if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
                         local hasWhitelist, oreName = HasWhitelistOre(descendant.Parent)
                         if hasWhitelist then
-                            -- Create unique ID using rock position
                             local rockId = string.format("%.0f_%.0f_%.0f", 
                                 descendant.Position.X, 
                                 descendant.Position.Y, 
                                 descendant.Position.Z)
                             
-                            -- Only notify if not already notified AND rock still has HP
                             local infoFrame = descendant.Parent:FindFirstChild("infoFrame")
                             local hpText = infoFrame and infoFrame:FindFirstChild("Frame") and infoFrame.Frame:FindFirstChild("rockHP") and infoFrame.Frame.rockHP.Text
                             
@@ -813,7 +910,6 @@ local function FindNearestRock(maxDist)
                                 local hp = tonumber(hpText:match("^(%d+)"))
                                 if not hp or hp <= 0 then 
                                     rockHasHP = false
-                                    -- Clear from notified list if rock is depleted
                                     NotifiedRocks[rockId] = nil
                                 end
                             end
@@ -882,12 +978,10 @@ local function FastTweenToRock(rock)
     
     local distance = (root.Position - goalCFrame.Position).Magnitude
     
-    -- Use slower speed for Main Alt in Alt Farm mode
     local isMainAltMode = AltFarmEnabled and AltFarmMode == "Main Alt"
     
     local tweenTime
     if isMainAltMode then
-        -- Slower speeds for Main Alt (divide by smaller numbers = slower movement)
         if distance < 10 then
             tweenTime = distance / 10
         elseif distance < 30 then
@@ -900,7 +994,6 @@ local function FastTweenToRock(rock)
             tweenTime = distance / 20
         end
     else
-        -- Normal speeds for regular auto mine
         if distance < 10 then
             tweenTime = distance / 20
         elseif distance < 30 then
@@ -936,17 +1029,15 @@ local function FastTweenToRock(rock)
     CurrentTween:Play()
 end
 
--- Clean up notified rocks periodically (remove depleted rocks from tracking)
 task.spawn(function()
     while true do
-        task.wait(10) -- Check every 10 seconds
+        task.wait(10)
         
         if AltFarmEnabled and AltFarmMode == "Helper Alt" and WhitelistOresEnabled then
             local rocksFolder = Workspace:FindFirstChild("Rocks")
             if rocksFolder then
                 local activeRockIds = {}
                 
-                -- Build list of active rocks with HP
                 for _, region in ipairs(rocksFolder:GetChildren()) do
                     for _, descendant in ipairs(region:GetDescendants()) do
                         if descendant.Name == "Hitbox" and descendant:IsA("BasePart") and descendant.Parent then
@@ -968,7 +1059,6 @@ task.spawn(function()
                     end
                 end
                 
-                -- Remove depleted rocks from notification tracking
                 for rockId, _ in pairs(NotifiedRocks) do
                     if not activeRockIds[rockId] then
                         NotifiedRocks[rockId] = nil
@@ -979,7 +1069,6 @@ task.spawn(function()
     end
 end)
 
--- Listen for messages from Helper Alt (Main Alt Mode)
 task.spawn(function()
     local TextChatService = game:GetService("TextChatService")
     local Players = game:GetService("Players")
@@ -996,22 +1085,32 @@ task.spawn(function()
                         if coords then
                             local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
                             if x and y and z then
+                                if AutoMineEnabled and ActiveMiningTarget and not IsMovingToWhitelistRock then
+                                    PausedAutoMineTarget = ActiveMiningTarget
+                                    AutoMineWasPaused = true
+                                    UpdateAltFarmGUI("Paused auto-mine for priority", oreName or "Unknown", nil, "Priority", nil)
+                                end
+                                
                                 MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
                                 MainAltCalledOreName = oreName or "Unknown"
                                 IsMovingToWhitelistRock = true
                                 
-                                UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
+                                UpdateAltFarmGUI("Received notification", MainAltCalledOreName, nil, "Active", nil)
                                 
                                 Fluent:Notify({
                                     Title = "Alt Farm - Main Alt",
                                     Content = "Received " .. MainAltCalledOreName .. " location!",
-                                    SubContent = "Moving to location...",
+                                    SubContent = AutoMineWasPaused and "Paused auto-mine" or "Moving to location...",
                                     Duration = 5
                                 })
                                 
+                                if CurrentTween then
+                                    CurrentTween:Cancel()
+                                    CurrentTween = nil
+                                end
+                                
                                 ActiveMiningTarget = nil
                                 
-                                -- Force enable mining features
                                 MineBelowTarget = true
                                 SetNoclip(true)
                                 SetupCharacterHighlight(true)
@@ -1040,22 +1139,32 @@ task.spawn(function()
                         if coords then
                             local x, y, z = coords:match("([^,]+),([^,]+),([^,]+)")
                             if x and y and z then
+                                if AutoMineEnabled and ActiveMiningTarget and not IsMovingToWhitelistRock then
+                                    PausedAutoMineTarget = ActiveMiningTarget
+                                    AutoMineWasPaused = true
+                                    UpdateAltFarmGUI("Paused auto-mine for priority", oreName or "Unknown", nil, "Priority", nil)
+                                end
+                                
                                 MainAltCalledPosition = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
                                 MainAltCalledOreName = oreName or "Unknown"
                                 IsMovingToWhitelistRock = true
                                 
-                                UpdateAltFarmGUI("Received notification!", MainAltCalledOreName, nil, "Active", nil)
+                                UpdateAltFarmGUI("Received notification", MainAltCalledOreName, nil, "Active", nil)
                                 
                                 Fluent:Notify({
                                     Title = "Alt Farm - Main Alt",
                                     Content = "Received " .. MainAltCalledOreName .. " location!",
-                                    SubContent = "Moving to location...",
+                                    SubContent = AutoMineWasPaused and "Paused auto-mine" or "Moving to location...",
                                     Duration = 5
                                 })
                                 
+                                if CurrentTween then
+                                    CurrentTween:Cancel()
+                                    CurrentTween = nil
+                                end
+                                
                                 ActiveMiningTarget = nil
                                 
-                                -- Force enable mining features
                                 MineBelowTarget = true
                                 SetNoclip(true)
                                 SetupCharacterHighlight(true)
@@ -1071,7 +1180,6 @@ task.spawn(function()
     end
 end)
 
--- Main Alt GUI Distance Updater
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -1090,7 +1198,6 @@ task.spawn(function()
                     UpdateAltFarmGUI(nil, nil, "--", nil, nil)
                 end
                 
-                -- Update rock count
                 local notifiedCount = 0
                 for _ in pairs(NotifiedRocks) do
                     notifiedCount = notifiedCount + 1
@@ -1108,7 +1215,6 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
         
-        -- Check if we should be mining (either AutoMine enabled OR Main Alt with called position)
         local shouldMine = AutoMineEnabled or (AltFarmEnabled and AltFarmMode == "Main Alt" and (MainAltCalledPosition or ActiveMiningTarget))
         
         if shouldMine and MineBelowTarget and root and humanoid and ActiveMiningTarget and ActiveMiningTarget.Parent then
@@ -1147,11 +1253,9 @@ task.spawn(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChild("Humanoid")
 
-        -- Check if we should be mining (either AutoMine enabled OR Main Alt with called position)
         local shouldMine = AutoMineEnabled or (AltFarmEnabled and AltFarmMode == "Main Alt" and (MainAltCalledPosition or ActiveMiningTarget))
 
         if shouldMine and ToolActivated and root and humanoid then
-            -- Main Alt Mode: Priority check for called position
             if AltFarmEnabled and AltFarmMode == "Main Alt" and MainAltCalledPosition and IsMovingToWhitelistRock then
                 local rocksFolder = Workspace:FindFirstChild("Rocks")
                 if rocksFolder then
@@ -1189,11 +1293,11 @@ task.spawn(function()
                     if closestRockToCall then
                         ActiveMiningTarget = closestRockToCall
                         IsMovingToWhitelistRock = false
-                        UpdateAltFarmGUI("Moving to " .. foundOreName .. "...", foundOreName, nil, "Traveling", nil)
+                        UpdateAltFarmGUI("Moving to priority target", foundOreName, nil, "Traveling", nil)
                         FastTweenToRock(ActiveMiningTarget)
                         MainAltCalledPosition = nil
                     else
-                        UpdateAltFarmGUI("Searching for rock...", MainAltCalledOreName, nil, "Searching", nil)
+                        UpdateAltFarmGUI("Searching for priority rock", MainAltCalledOreName, nil, "Searching", nil)
                     end
                 end
             end
@@ -1212,7 +1316,6 @@ task.spawn(function()
             if ActiveMiningTarget and ActiveMiningTarget.Parent then
                 local isTarget = false
                 
-                -- For Main Alt mode, we don't check MineTargets
                 if AltFarmEnabled and AltFarmMode == "Main Alt" then
                     isTarget = true
                 else
@@ -1242,7 +1345,21 @@ task.spawn(function()
                                     targetValid = true 
                                 else
                                     if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                                        UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, "Standby", nil)
+                                        if AutoMineWasPaused and PausedAutoMineTarget then
+                                            UpdateAltFarmGUI("Resuming auto-mine", "Auto", nil, "Resuming", nil)
+                                            ActiveMiningTarget = PausedAutoMineTarget
+                                            PausedAutoMineTarget = nil
+                                            AutoMineWasPaused = false
+                                            
+                                            Fluent:Notify({
+                                                Title = "Alt Farm - Main Alt",
+                                                Content = "Priority complete!",
+                                                SubContent = "Resuming auto-mine...",
+                                                Duration = 3
+                                            })
+                                        else
+                                            UpdateAltFarmGUI("Priority complete", "None", nil, "Standby", nil)
+                                        end
                                         MainAltCalledPosition = nil
                                         IsMovingToWhitelistRock = false
                                     end
@@ -1260,7 +1377,21 @@ task.spawn(function()
                                 targetValid = true 
                             else
                                 if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                                    UpdateAltFarmGUI("Rock mined! Waiting...", "None", nil, "Standby", nil)
+                                    if AutoMineWasPaused and PausedAutoMineTarget then
+                                        UpdateAltFarmGUI("Resuming auto-mine", "Auto", nil, "Resuming", nil)
+                                        ActiveMiningTarget = PausedAutoMineTarget
+                                        PausedAutoMineTarget = nil
+                                        AutoMineWasPaused = false
+                                        
+                                        Fluent:Notify({
+                                            Title = "Alt Farm - Main Alt",
+                                            Content = "Priority complete!",
+                                            SubContent = "Resuming auto-mine...",
+                                            Duration = 3
+                                        })
+                                    else
+                                        UpdateAltFarmGUI("Priority complete", "None", nil, "Standby", nil)
+                                    end
                                     MainAltCalledPosition = nil
                                     IsMovingToWhitelistRock = false
                                 end
@@ -1282,13 +1413,16 @@ task.spawn(function()
                 
                 if AltFarmEnabled and AltFarmMode == "Main Alt" and AltFarmGUI then
                     if not MainAltCalledPosition and not IsMovingToWhitelistRock then
-                        UpdateAltFarmGUI("Waiting for helper alt...", "None", nil, "Standby", nil)
+                        if AutoMineEnabled then
+                            UpdateAltFarmGUI("Auto-mine active", "Auto", nil, "Auto-Mining", nil)
+                        else
+                            UpdateAltFarmGUI("Waiting for notification", "None", nil, "Standby", nil)
+                        end
                     end
                 end
             end
 
-            -- Only find nearest rock if AutoMine is enabled (not for Main Alt waiting mode)
-            if not ActiveMiningTarget and AutoMineEnabled then
+            if not ActiveMiningTarget and AutoMineEnabled and not IsMovingToWhitelistRock then
                 ActiveMiningTarget = FindNearestRock(500)
                 if ActiveMiningTarget then
                     FastTweenToRock(ActiveMiningTarget)
@@ -1301,13 +1435,15 @@ task.spawn(function()
                 if dist > 30 and not IsTweening then
                     FastTweenToRock(ActiveMiningTarget)
                     if AltFarmEnabled and AltFarmMode == "Main Alt" then
-                        UpdateAltFarmGUI("Moving to rock...", MainAltCalledOreName or "Ore", dist, "Traveling", nil)
+                        local targetType = IsMovingToWhitelistRock and "priority rock" or (AutoMineEnabled and "auto-mine rock" or "rock")
+                        UpdateAltFarmGUI("Moving to " .. targetType, MainAltCalledOreName or "Ore", dist, "Traveling", nil)
                     end
                 end
                 
                 if dist <= 30 then
                     if AltFarmEnabled and AltFarmMode == "Main Alt" and not IsTweening then
-                        UpdateAltFarmGUI("Mining rock...", MainAltCalledOreName or "Ore", dist, "Mining", nil)
+                        local miningType = AutoMineWasPaused and "priority" or (AutoMineEnabled and "auto-mine" or "priority")
+                        UpdateAltFarmGUI("Mining " .. miningType, MainAltCalledOreName or "Ore", dist, "Mining", nil)
                     end
                     
                     for i = 1, 3 do
@@ -1357,6 +1493,9 @@ Tabs.Main:AddToggle("AutoMineToggle", {
                     humanoid.PlatformStand = false
                 end
             end
+            
+            PausedAutoMineTarget = nil
+            AutoMineWasPaused = false
         else
             SetupCamera(true)
         end
@@ -1568,7 +1707,6 @@ Tabs.Main:AddParagraph({
     Content = "When enabled, auto mining will only target rocks within selected regions."
 })
 
--- Alt Farm Section
 Tabs.Main:AddSection("Alt Farm System")
 
 Tabs.Main:AddToggle("AltFarmToggle", {
@@ -1581,7 +1719,7 @@ Tabs.Main:AddToggle("AltFarmToggle", {
         if state then
             if AltFarmMode == "Main Alt" then
                 CreateAltFarmGUI()
-                UpdateAltFarmGUI("Waiting for helper alt...", "None", "--", "Standby", 0)
+                UpdateAltFarmGUI("Waiting for notification", "None", "--", "Standby", 0)
             end
             
             Fluent:Notify({
@@ -1596,6 +1734,8 @@ Tabs.Main:AddToggle("AltFarmToggle", {
             MainAltCalledOreName = ""
             IsMovingToWhitelistRock = false
             LastNotificationTime = 0
+            PausedAutoMineTarget = nil
+            AutoMineWasPaused = false
             
             if AltFarmGUI then
                 AltFarmGUI:Destroy()
@@ -1639,7 +1779,7 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
         
         if AltFarmEnabled and value == "Main Alt" then
             CreateAltFarmGUI()
-            UpdateAltFarmGUI("Waiting for helper alt...", "None", "--", "Standby", 0)
+            UpdateAltFarmGUI("Waiting for notification", "None", "--", "Standby", 0)
         elseif AltFarmGUI then
             AltFarmGUI:Destroy()
             AltFarmGUI = nil
@@ -1657,6 +1797,8 @@ Tabs.Main:AddDropdown("AltFarmModeDropdown", {
         MainAltCalledOreName = ""
         IsMovingToWhitelistRock = false
         LastNotificationTime = 0
+        PausedAutoMineTarget = nil
+        AutoMineWasPaused = false
         
         if not AutoMineEnabled then
             ActiveMiningTarget = nil
@@ -1782,9 +1924,10 @@ Tabs.Main:AddButton({
 })
 
 Tabs.Main:AddParagraph({
-    Title = "Alt Farm Guide",
-    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nMain Alt will auto-enable: Mine Below Target, Noclip, Highlight, and Camera when receiving notification.\n\nMain Alt moves slower than normal auto mine for smoother travel.\n\nCooldown: 2 seconds between notifications to prevent spam."
+    Title = "Alt Farm Guideiop",
+    Content = "Helper Alt: Mines normally but notifies Main Alt about whitelist ores.\n\nMain Alt: Auto-mines whitelist ores when notified (Auto Mine can be OFF!).\n\nBoth must be in same game!\n\nPriority System: When Main Alt receives notification during auto-mine, it pauses current rock, mines priority ore, then resumes where it left off.\n\nMain Alt moves slower than normal auto mine for smoother travel.\n\nCooldown: 2 seconds between notifications to prevent spam."
 })
+
 
 -- Auto Attack Tab
 local AutoAttackEnabled = false
