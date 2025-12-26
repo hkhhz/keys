@@ -27,12 +27,29 @@ local StartForge = GetServiceRemote("ForgeService", "RF", "StartForge")
 local Forge = GetServiceRemote("ProximityService", "RF", "Forge")
 local RS = game:GetService("ReplicatedStorage")
 
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
 local minimizeUI = Enum.KeyCode.LeftControl
+
+local size
+if UserInputService.TouchEnabled then
+    local viewport = Camera.ViewportSize
+    local padding = 20
+
+    local width = math.clamp(viewport.X - padding, 320, 420)
+    local height = math.clamp(viewport.Y - padding, 300, 360)
+
+    size = UDim2.fromOffset(width, height)
+else
+    size = UDim2.fromOffset(600, 450)
+end
+
 local Window = Neox:CreateWindow({
     Title = "NEOX HUB | Forge",
     SubTitle = "by neoxsoftworks",
     TabWidth = 120,
-    Size = UDim2.fromOffset(500, 380),
+    Size = size,
     Acrylic = false,
     Theme = "Darker",
     MinimizeKey = minimizeUI
@@ -3640,7 +3657,7 @@ Slider:OnChanged(function(value)
 end)
 
 local Toggle = Tabs.Forge:AddToggle("AutoPotionToggle", {
-    Title = "Auto Use Potion",
+    Title = "Auto Use Potion3",
     Description = "",
     Default = false,
 })
